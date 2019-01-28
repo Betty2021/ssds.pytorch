@@ -12,7 +12,7 @@ import uuid
 
 from lib.utils.pycocotools.coco import COCO
 from lib.utils.pycocotools.cocoeval import COCOeval
-from lib.utils.pycocotools import mask as COCOmask
+#from lib.utils.pycocotools import mask as COCOmask
 
 
 class COCODetection(data.Dataset):

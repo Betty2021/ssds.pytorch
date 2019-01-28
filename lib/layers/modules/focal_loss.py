@@ -33,7 +33,8 @@ class FocalLoss(nn.Module):
         self.unmatched_threshold = cfg.UNMATCHED_THRESHOLD
         self.variance = cfg.VARIANCE
         self.priors = priors
-
+        cfg.alpha=0.25
+        cfg.gamma=2.0
         self.alpha = Variable(torch.ones(self.num_classes, 1) * cfg.alpha)
         self.gamma = cfg.gamma
 
@@ -79,7 +80,7 @@ class FocalLoss(nn.Module):
         loc_p = loc_data[pos_idx].view(-1,4)
         loc_t = loc_t[pos_idx].view(-1,4)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
-        loss_l/=num_pos.data.sum()
+        loss_l/=num_pos
 
         # Confidence Loss (Focal loss)
         # Shape: [batch,num_priors,1]
@@ -108,5 +109,5 @@ class FocalLoss(nn.Module):
 
         batch_loss = -alpha*(torch.pow((1-probs), self.gamma))*log_p 
 
-        loss = batch_loss.mean()
+        loss = batch_loss.sum()/48
         return loss

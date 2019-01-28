@@ -23,11 +23,14 @@ def _crop(image, boxes, labels):
     while True:
         mode = random.choice((
             None,
-            (0.1, None),
-            (0.3, None),
-            (0.5, None),
-            (0.7, None),
-            (0.9, None),
+            (0.008, 0.25),
+            (0.02, 0.25),
+            (0.05, 0.25),
+            (0.1,  0.30),
+            (0.3,  0.5),
+            #(0.5, None),
+            #(0.7, None),
+            #(0.9, None),
             (None, None),
         ))
 
@@ -41,9 +44,9 @@ def _crop(image, boxes, labels):
             max_iou = float('inf')
 
         for _ in range(50):
-            scale = random.uniform(0.3,1.)
-            min_ratio = max(0.5, scale*scale)
-            max_ratio = min(2, 1. / scale / scale)
+            scale = random.uniform(0.67, 1.)
+            min_ratio = max(0.85, scale*scale)
+            max_ratio = min(1/0.85, 1. / scale / scale)
             ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
             w = int(scale * ratio * width)
             h = int((scale / ratio) * height)
@@ -67,11 +70,25 @@ def _crop(image, boxes, labels):
             labels_t = labels[mask].copy()
             if len(boxes_t) == 0:
                 continue
+            old_boxes_t = boxes_t.copy()
 
             boxes_t[:, :2] = np.maximum(boxes_t[:, :2], roi[:2])
             boxes_t[:, :2] -= roi[:2]
             boxes_t[:, 2:] = np.minimum(boxes_t[:, 2:], roi[2:])
             boxes_t[:, 2:] -= roi[:2]
+
+            #
+            new_area = (boxes_t[:, 2] - boxes_t[:, 0]) * (boxes_t[:, 3] - boxes_t[:, 1])
+            old_area = (old_boxes_t[:, 2] - old_boxes_t[:, 0]) * (old_boxes_t[:, 3] - old_boxes_t[:, 1])
+            iou = new_area/ old_area
+            mask= iou>0.7
+            bad_boxes_t=boxes_t[~mask]
+            for box in bad_boxes_t:
+                #print("black out the box because iou <0.7")
+                image_t[int(box[1]):int(box[3]), int(box[0]):int(box[2])] = 0
+
+            boxes_t = boxes_t[mask]
+            labels_t = labels_t [mask]
 
             return image_t, boxes_t,labels_t
 
@@ -112,10 +129,10 @@ def _expand(image, boxes, fill, p):
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1,4)
+        scale = random.uniform(1,1.3)
 
-        min_ratio = max(0.5, 1./scale/scale)
-        max_ratio = min(2, scale*scale)
+        min_ratio = max(0.7, 1./scale/scale)
+        max_ratio = min(1.4, scale*scale)
         ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
         ws = scale*ratio
         hs = scale/ratio
@@ -178,11 +195,22 @@ def _elastic(image, p, alpha=None, sigma=None, random_state=None):
     return cv2.remap(image, x, y, interpolation=cv2.INTER_LINEAR, borderValue= 0, borderMode=cv2.BORDER_REFLECT)
 
 
-def preproc_for_test(image, insize, mean):
+def preproc_for_test(image, w_h_insize, mean):
     interp_methods = [cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4]
     interp_method = interp_methods[random.randrange(5)]
-    image = cv2.resize(image, (insize[0], insize[1]),interpolation=interp_method)
+    image = cv2.resize(image, (w_h_insize[0], w_h_insize[1]),interpolation=interp_method)
     image = image.astype(np.float32)
+    image -= mean
+    return image.transpose(2, 0, 1)
+
+def preproc_resize(image, w_h_insize):
+    interp_methods = [cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4]
+    interp_method = interp_methods[random.randrange(5)]
+    image = cv2.resize(image, (w_h_insize[0], w_h_insize[1]),interpolation=interp_method)
+    return image
+
+def preproc_for_test_with_resized_img(resized_image, mean):
+    image = resized_image.astype(np.float32)
     image -= mean
     return image.transpose(2, 0, 1)
 
@@ -197,7 +225,7 @@ class preproc(object):
 
     def __init__(self, resize, rgb_means, p, writer=None):
         self.means = rgb_means
-        self.resize = resize
+        self.w_h_resize = [resize[1],resize[0]]  #opencv's resize, which is w,h
         self.p = p
         self.writer = writer # writer used for tensorboard visualization
         self.epoch = 0
@@ -206,16 +234,16 @@ class preproc(object):
         # some bugs 
         if self.p == -2: # abs_test
             targets = np.zeros((1,5))
-            targets[0] = image.shape[0]
-            targets[0] = image.shape[1]
-            image = preproc_for_test(image, self.resize, self.means)
+            #targets[0] = image.shape[0]
+            #targets[0] = image.shape[1]
+            image = preproc_for_test(image, self.w_h_resize, self.means)
             return torch.from_numpy(image), targets
 
         boxes = targets[:,:-1].copy()
         labels = targets[:,-1].copy()
         if len(boxes) == 0:
             targets = np.zeros((1,5))
-            image = preproc_for_test(image, self.resize, self.means) # some ground truth in coco do not have bounding box! weird!
+            image = preproc_for_test(image, self.w_h_resize, self.means) # some ground truth in coco do not have bounding box! weird!
             return torch.from_numpy(image), targets
         if self.p == -1: # eval
             height, width, _ = image.shape
@@ -223,7 +251,7 @@ class preproc(object):
             boxes[:, 1::2] /= height
             labels = np.expand_dims(labels,1)
             targets = np.hstack((boxes,labels))
-            image = preproc_for_test(image, self.resize, self.means)
+            image = preproc_for_test(image, self.w_h_resize, self.means)
             return torch.from_numpy(image), targets
 
         image_o = image.copy()
@@ -238,17 +266,21 @@ class preproc(object):
 
         if self.writer is not None:
             image_show = draw_bbox(image, boxes)
-            self.writer.add_image('preprocess/input_image', image_show, self.epoch)
+            self.writer.add_image('preprocess/input_image', image_show, self.epoch, dataformats='HWC')
 
         image_t, boxes, labels = _crop(image, boxes, labels)
         if self.writer is not None:
             image_show = draw_bbox(image_t, boxes)
-            self.writer.add_image('preprocess/crop_image', image_show, self.epoch)
+            self.writer.add_image('preprocess/crop_image', image_show, self.epoch,dataformats='HWC')
 
-        image_t = _distort(image_t)
-        if self.writer is not None:
-            image_show = draw_bbox(image_t, boxes)
-            self.writer.add_image('preprocess/distort_image', image_show, self.epoch)
+        distorted = False
+        h, w ,_ = image_t.shape
+        if h*w < self.w_h_resize[0]* self.w_h_resize[1]:
+            distorted = True
+            image_t = _distort(image_t)
+            if self.writer is not None:
+                image_show = draw_bbox(image_t, boxes)
+                self.writer.add_image('preprocess/distort_image', image_show, self.epoch, dataformats='HWC')
         
         # image_t = _elastic(image_t, self.p)
         # if self.writer is not None:
@@ -258,12 +290,12 @@ class preproc(object):
         image_t, boxes = _expand(image_t, boxes, self.means, self.p)
         if self.writer is not None:
             image_show = draw_bbox(image_t, boxes)
-            self.writer.add_image('preprocess/expand_image', image_show, self.epoch)
+            self.writer.add_image('preprocess/expand_image', image_show, self.epoch, dataformats='HWC')
 
-        image_t, boxes = _mirror(image_t, boxes)
-        if self.writer is not None:
-            image_show = draw_bbox(image_t, boxes)
-            self.writer.add_image('preprocess/mirror_image', image_show, self.epoch)
+        #image_t, boxes = _mirror(image_t, boxes)
+        #if self.writer is not None:
+        #    image_show = draw_bbox(image_t, boxes)
+        #    self.writer.add_image('preprocess/mirror_image', image_show, self.epoch)
 
         # only write the preprocess step for the first image
         if self.writer is not None:
@@ -271,18 +303,24 @@ class preproc(object):
             self.release_writer()
 
         height, width, _ = image_t.shape
-        image_t = preproc_for_test(image_t, self.resize, self.means)
+        image_t = preproc_resize(image_t, self.w_h_resize)
+        if not distorted:
+            image_t = _distort(image_t)
+
+        image_t = preproc_for_test_with_resized_img(image_t, self.means)
+
         boxes = boxes.copy()
         boxes[:, 0::2] /= width
         boxes[:, 1::2] /= height
         b_w = (boxes[:, 2] - boxes[:, 0])*1.
         b_h = (boxes[:, 3] - boxes[:, 1])*1.
-        mask_b= np.minimum(b_w, b_h) > 0.01
+        #mask_b= np.minimum(b_w, b_h) > 0.01
+        mask_b= (b_w*b_h) > 0.0003  #area should
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b].copy()
 
         if len(boxes_t)==0:
-            image = preproc_for_test(image_o, self.resize, self.means)
+            image = preproc_for_test(image_o, self.w_h_resize, self.means)
             return torch.from_numpy(image),targets_o
 
         labels_t = np.expand_dims(labels_t,1)

@@ -36,6 +36,9 @@ class PriorBox(object):
 
     def forward(self):
         mean = []
+        aspect=self.image_size[1]/self.image_size[0] # w/h
+        aspect_sqrt=sqrt(aspect)
+        #aspect=1.0
         # l = 0
         for k, f in enumerate(self.feature_maps):
             for i, j in product(range(f[0]), range(f[1])):
@@ -45,21 +48,27 @@ class PriorBox(object):
 
                 # rest of aspect ratios
                 for ar in self.aspect_ratios[k]:
-                    if isinstance(ar, int):
-                        if ar == 1:
-                            # aspect_ratio: 1 Min size
-                            mean += [cx, cy, s_k, s_k]
+                    ar_sqrt = sqrt(ar/aspect)
+                    mean += [cx, cy, s_k*ar_sqrt, s_k/ar_sqrt]
 
-                            # aspect_ratio: 1 Max size
-                            # rel size: sqrt(s_k * s_(k+1))
-                            s_k_prime = sqrt(s_k * self.scales[k+1])
-                            mean += [cx, cy, s_k_prime, s_k_prime]
-                        else:
-                            ar_sqrt = sqrt(ar)
-                            mean += [cx, cy, s_k*ar_sqrt, s_k/ar_sqrt]
-                            mean += [cx, cy, s_k/ar_sqrt, s_k*ar_sqrt]
-                    elif isinstance(ar, list):
-                        mean += [cx, cy, s_k*ar[0], s_k*ar[1]]
+                #s_k_prime = sqrt(s_k * self.scales[k + 1])
+                #mean += [cx, cy, s_k_prime/aspect_sqrt, s_k_prime*aspect_sqrt]
+
+                    # if isinstance(ar, int):
+                    #     if ar == 1:
+                    #         # aspect_ratio: 1 Min size
+                    #         mean += [cx, cy, s_k, s_k]
+                    #
+                    #         # aspect_ratio: 1 Max size
+                    #         # rel size: sqrt(s_k * s_(k+1))
+                    #         s_k_prime = sqrt(s_k * self.scales[k+1])
+                    #         mean += [cx, cy, s_k_prime, s_k_prime]
+                    #     else:
+                    #         ar_sqrt = sqrt(ar)
+                    #         mean += [cx, cy, s_k*ar_sqrt, s_k/ar_sqrt]
+                    #         mean += [cx, cy, s_k/ar_sqrt, s_k*ar_sqrt]
+                    # elif isinstance(ar, list):
+                    #     mean += [cx, cy, s_k*ar[0], s_k*ar[1]]
         #     print(f, self.aspect_ratios[k])
         # assert False
         # back to torch land

@@ -58,8 +58,9 @@ def create_model(cfg):
     '''
     #
     base = networks_map[cfg.NETS]
-    number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios) for aspect_ratios in cfg.ASPECT_RATIOS]  
-        
+    number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios) for aspect_ratios in cfg.ASPECT_RATIOS]
+    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios)+1 for aspect_ratios in cfg.ASPECT_RATIOS]
+
     model = ssds_map[cfg.SSDS](base=base, feature_layer=cfg.FEATURE_LAYER, mbox=number_box, num_classes=cfg.NUM_CLASSES)
     #
     feature_maps = _forward_features_size(model, cfg.IMAGE_SIZE)

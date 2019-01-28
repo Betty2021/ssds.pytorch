@@ -18,7 +18,8 @@ from torch.autograd import Variable
 
 from lib.utils.config_parse import cfg_from_file
 from lib.ssds_train import train_model
-
+#print("checkHardwareSupport()", cv2.setUseOptimized(True))
+#print(cv2.getBuildInformation())
 def parse_args():
     """
     Parse input arguments

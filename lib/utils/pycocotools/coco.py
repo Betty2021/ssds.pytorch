@@ -52,7 +52,7 @@ from matplotlib.patches import Polygon
 import numpy as np
 import copy
 import itertools
-from . import mask as maskUtils
+#from . import mask as maskUtils
 import os
 from collections import defaultdict
 import sys
@@ -260,20 +260,21 @@ class COCO:
                             color.append(c)
                     else:
                         # mask
-                        t = self.imgs[ann['image_id']]
-                        if type(ann['segmentation']['counts']) == list:
-                            rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
-                        else:
-                            rle = [ann['segmentation']]
-                        m = maskUtils.decode(rle)
-                        img = np.ones( (m.shape[0], m.shape[1], 3) )
-                        if ann['iscrowd'] == 1:
-                            color_mask = np.array([2.0,166.0,101.0])/255
-                        if ann['iscrowd'] == 0:
-                            color_mask = np.random.random((1, 3)).tolist()[0]
-                        for i in range(3):
-                            img[:,:,i] = color_mask[i]
-                        ax.imshow(np.dstack( (img, m*0.5) ))
+                        # t = self.imgs[ann['image_id']]
+                        # if type(ann['segmentation']['counts']) == list:
+                        #     rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
+                        # else:
+                        #     rle = [ann['segmentation']]
+                        # m = maskUtils.decode(rle)
+                        # img = np.ones( (m.shape[0], m.shape[1], 3) )
+                        # if ann['iscrowd'] == 1:
+                        #     color_mask = np.array([2.0,166.0,101.0])/255
+                        # if ann['iscrowd'] == 0:
+                        #     color_mask = np.random.random((1, 3)).tolist()[0]
+                        # for i in range(3):
+                        #     img[:,:,i] = color_mask[i]
+                        # ax.imshow(np.dstack( (img, m*0.5) ))
+                        pass
                 if 'keypoints' in ann and type(ann['keypoints']) == list:
                     # turn skeleton into zero-based index
                     sks = np.array(self.loadCats(ann['category_id'])[0]['skeleton'])-1
@@ -331,14 +332,15 @@ class COCO:
                 ann['id'] = id+1
                 ann['iscrowd'] = 0
         elif 'segmentation' in anns[0]:
-            res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
-            for id, ann in enumerate(anns):
-                # now only support compressed RLE format as segmentation results
-                ann['area'] = maskUtils.area(ann['segmentation'])
-                if not 'bbox' in ann:
-                    ann['bbox'] = maskUtils.toBbox(ann['segmentation'])
-                ann['id'] = id+1
-                ann['iscrowd'] = 0
+            # res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
+            # for id, ann in enumerate(anns):
+            #     # now only support compressed RLE format as segmentation results
+            #     ann['area'] = maskUtils.area(ann['segmentation'])
+            #     if not 'bbox' in ann:
+            #         ann['bbox'] = maskUtils.toBbox(ann['segmentation'])
+            #     ann['id'] = id+1
+            #     ann['iscrowd'] = 0
+            pass
         elif 'keypoints' in anns[0]:
             res.dataset['categories'] = copy.deepcopy(self.dataset['categories'])
             for id, ann in enumerate(anns):
@@ -402,32 +404,32 @@ class COCO:
                 }]
         return ann
 
-    def annToRLE(self, ann):
-        """
-        Convert annotation which can be polygons, uncompressed RLE to RLE.
-        :return: binary mask (numpy 2D array)
-        """
-        t = self.imgs[ann['image_id']]
-        h, w = t['height'], t['width']
-        segm = ann['segmentation']
-        if type(segm) == list:
-            # polygon -- a single object might consist of multiple parts
-            # we merge all parts into one mask rle code
-            rles = maskUtils.frPyObjects(segm, h, w)
-            rle = maskUtils.merge(rles)
-        elif type(segm['counts']) == list:
-            # uncompressed RLE
-            rle = maskUtils.frPyObjects(segm, h, w)
-        else:
-            # rle
-            rle = ann['segmentation']
-        return rle
-
-    def annToMask(self, ann):
-        """
-        Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
-        :return: binary mask (numpy 2D array)
-        """
-        rle = self.annToRLE(ann)
-        m = maskUtils.decode(rle)
-        return m
+    # def annToRLE(self, ann):
+    #     """
+    #     Convert annotation which can be polygons, uncompressed RLE to RLE.
+    #     :return: binary mask (numpy 2D array)
+    #     """
+    #     t = self.imgs[ann['image_id']]
+    #     h, w = t['height'], t['width']
+    #     segm = ann['segmentation']
+    #     if type(segm) == list:
+    #         # polygon -- a single object might consist of multiple parts
+    #         # we merge all parts into one mask rle code
+    #         rles = maskUtils.frPyObjects(segm, h, w)
+    #         rle = maskUtils.merge(rles)
+    #     elif type(segm['counts']) == list:
+    #         # uncompressed RLE
+    #         rle = maskUtils.frPyObjects(segm, h, w)
+    #     else:
+    #         # rle
+    #         rle = ann['segmentation']
+    #     return rle
+    #
+    # def annToMask(self, ann):
+    #     """
+    #     Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
+    #     :return: binary mask (numpy 2D array)
+    #     """
+    #     rle = self.annToRLE(ann)
+    #     m = maskUtils.decode(rle)
+    #     return m

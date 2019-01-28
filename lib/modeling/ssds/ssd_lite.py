@@ -26,7 +26,7 @@ class SSDLite(nn.Module):
         self.num_classes = num_classes
         # SSD network
         self.base = nn.ModuleList(base)
-        self.norm = L2Norm(feature_layer[1][0], 20)
+        #self.norm = L2Norm(feature_layer[1][0], 20)
         self.extras = nn.ModuleList(extras)
 
         self.loc = nn.ModuleList(head[0])
@@ -65,11 +65,11 @@ class SSDLite(nn.Module):
         for k in range(len(self.base)):
             x = self.base[k](x)
             if k in self.feature_layer:
-                if len(sources) == 0:
-                    s = self.norm(x)
-                    sources.append(s)
-                else:
-                    sources.append(x)
+                #if len(sources) == 0:
+                #    s = self.norm(x)
+                #    sources.append(s)
+                #else:
+                sources.append(x)
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
@@ -114,26 +114,40 @@ def add_extras(base, feature_layer, mbox, num_classes):
             in_channels = depth
         else:
             in_channels = depth
-        loc_layers += [nn.Conv2d(in_channels, box * 4, kernel_size=3, padding=1)]
-        conf_layers += [nn.Conv2d(in_channels, box * num_classes, kernel_size=3, padding=1)]
+        #loc_layers += [nn.Conv2d(in_channels, box * 4, kernel_size=3, padding=1)]
+        #conf_layers += [nn.Conv2d(in_channels, box * num_classes, kernel_size=3, padding=1)]
+        loc_layers += [ _conv_dw(in_channels, box*4, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
+        conf_layers += [ _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
     return base, extra_layers, (loc_layers, conf_layers)
+
 
 # based on the implementation in https://github.com/tensorflow/models/blob/master/research/object_detection/models/feature_map_generators.py#L213
 # when the expand_ratio is 1, the implemetation is nearly same. Since the shape is always change, I do not add the shortcut as what mobilenetv2 did.
-def _conv_dw(inp, oup, stride=1, padding=0, expand_ratio=1):
-    return nn.Sequential(
-        # pw
-        nn.Conv2d(inp, oup * expand_ratio, 1, 1, 0, bias=False),
-        nn.BatchNorm2d(oup * expand_ratio),
-        nn.ReLU6(inplace=True),
-        # dw
-        nn.Conv2d(oup * expand_ratio, oup * expand_ratio, 3, stride, padding, groups=oup * expand_ratio, bias=False),
-        nn.BatchNorm2d(oup * expand_ratio),
-        nn.ReLU6(inplace=True),
-        # pw-linear
-        nn.Conv2d(oup * expand_ratio, oup, 1, 1, 0, bias=False),
-        nn.BatchNorm2d(oup),
-    )
+def _conv_dw(inp, oup, stride=1, padding=0, expand_ratio=1, three_conv=True):
+    if three_conv:
+        return nn.Sequential(
+            # pw
+            nn.Conv2d(inp, oup * expand_ratio, 1, bias=False),
+            nn.BatchNorm2d(oup * expand_ratio),
+            nn.ReLU6(inplace=True),
+            # dw
+            nn.Conv2d(oup * expand_ratio, oup * expand_ratio, 3, stride, padding, groups=oup * expand_ratio, bias=False),
+            nn.BatchNorm2d(oup * expand_ratio),
+            nn.ReLU6(inplace=True),
+            # pw-linear
+            nn.Conv2d(oup * expand_ratio, oup, 1, bias=False),
+            nn.BatchNorm2d(oup),
+        )
+    else:
+        return nn.Sequential(
+            # dw
+            nn.Conv2d(inp , inp , 3, stride, padding, groups=inp, bias=False),
+            nn.BatchNorm2d(inp),
+            nn.ReLU6(inplace=True),
+            # pw-linear
+            nn.Conv2d(inp, oup, 1, 1, bias=False),
+            nn.BatchNorm2d(oup),
+        )
 
 def build_ssd_lite(base, feature_layer, mbox, num_classes):
     base_, extras_, head_ = add_extras(base(), feature_layer, mbox, num_classes)

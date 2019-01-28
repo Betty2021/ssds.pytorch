@@ -1,9 +1,11 @@
 from lib.dataset import voc
-from lib.dataset import coco
+from lib.dataset import newspage_dataset
+#from lib.dataset import coco
 
 dataset_map = {
                 'voc': voc.VOCDetection,
-                'coco': coco.COCODetection,
+                'np':  newspage_dataset.NPSet
+                #'coco': coco.COCODetection,
             }
 
 def gen_dataset_fn(name):

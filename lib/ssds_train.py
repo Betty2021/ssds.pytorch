@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys
 import cv2
+import datetime
 import random
 import pickle
 
@@ -24,6 +25,7 @@ from lib.dataset.dataset_factory import load_data
 from lib.utils.config_parse import cfg
 from lib.utils.eval_utils import *
 from lib.utils.visualize_utils import *
+from lib.utils.box_utils import *
 
 class Solver(object):
     """
@@ -53,8 +55,9 @@ class Solver(object):
             self.model.cuda()
             self.priors.cuda()
             cudnn.benchmark = True
-            # if torch.cuda.device_count() > 1:
-                # self.model = torch.nn.DataParallel(self.model).module
+            #if torch.cuda.device_count() > 1:
+                #print('-----DataParallel-----------')
+                #self.model = torch.nn.DataParallel(self.model).module
 
         # Print the model architecture and parameters
         print('Model architectures:\n{}\n'.format(self.model))
@@ -71,12 +74,14 @@ class Solver(object):
         self.max_epochs = cfg.TRAIN.MAX_EPOCHS
 
         # metric
-        self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
+        #self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
+        self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu)
 
         # Set the logger
         self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
         self.output_dir = cfg.EXP_DIR
         self.checkpoint = cfg.RESUME_CHECKPOINT
+        self.pretrained= cfg.PRETRAINED
         self.checkpoint_prefix = cfg.CHECKPOINTS_PREFIX
 
 
@@ -108,6 +113,12 @@ class Solver(object):
         # remove the module in the parrallel model
         if 'module.' in list(checkpoint.items())[0][0]:
             pretrained_dict = {'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint.items())}
+            checkpoint = pretrained_dict
+
+        elif "features." in list(checkpoint.items())[0][0]:
+            #classification file,
+            new_model_state = {}
+            pretrained_dict = {'base.'+'.'.join(k.split('.')[1:]): v for k, v in list(checkpoint.items())}
             checkpoint = pretrained_dict
 
         # change the name of the weights which exists in other model
@@ -190,8 +201,11 @@ class Solver(object):
         #     if hasattr(self.model, module):
         #         getattr(self.model, module).apply(self.weights_init)
         if self.checkpoint:
-            print('Loading initial model weights from {:s}'.format(self.checkpoint))
+            print('Loading initial model weights from detection file{:s}'.format(self.checkpoint))
             self.resume_checkpoint(self.checkpoint)
+        elif self.pretrained:
+            print('Loading initial model weights from classification file {:s}'.format(self.pretrained))
+            self.resume_checkpoint(self.pretrained)
 
         start_epoch = 0
         return start_epoch
@@ -225,7 +239,7 @@ class Solver(object):
         warm_up = self.cfg.TRAIN.LR_SCHEDULER.WARM_UP_EPOCHS
         for epoch in iter(range(start_epoch+1, self.max_epochs+1)):
             #learning rate
-            sys.stdout.write('\rEpoch {epoch:d}/{max_epochs:d}:\n'.format(epoch=epoch, max_epochs=self.max_epochs))
+            sys.stdout.write('\r'+str(datetime.datetime.now())+': Epoch {epoch:d}/{max_epochs:d}:\n'.format(epoch=epoch, max_epochs=self.max_epochs))
             if epoch > warm_up:
                 self.exp_lr_scheduler.step(epoch-warm_up)
             if 'train' in cfg.PHASE:
@@ -267,21 +281,24 @@ class Solver(object):
     def train_epoch(self, model, data_loader, optimizer, criterion, writer, epoch, use_gpu):
         model.train()
 
+        _t_all2 = Timer()
+        _t_all2.tic()
         epoch_size = len(data_loader)
         batch_iterator = iter(data_loader)
 
         loc_loss = 0
         conf_loss = 0
         _t = Timer()
-
+        _t_all = Timer()
         for iteration in iter(range((epoch_size))):
+            _t_all.tic()
             images, targets = next(batch_iterator)
             if use_gpu:
-                images = Variable(images.cuda())
-                targets = [Variable(anno.cuda(), volatile=True) for anno in targets]
+                images = Variable(images.cuda(),requires_grad=False)
+                targets = [Variable(anno.cuda(), requires_grad=False) for anno in targets]
             else:
                 images = Variable(images)
-                targets = [Variable(anno, volatile=True) for anno in targets]
+                targets = [Variable(anno, requires_grad=False) for anno in targets]
             _t.tic()
             # forward
             out = model(images, phase='train')
@@ -291,7 +308,7 @@ class Solver(object):
             loss_l, loss_c = criterion(out, targets)
 
             # some bugs in coco train2017. maybe the annonation bug.
-            if loss_l.data[0] == float("Inf"):
+            if loss_l.item() == float("Inf"):
                 continue
 
             loss = loss_l + loss_c
@@ -299,23 +316,24 @@ class Solver(object):
             optimizer.step()
 
             time = _t.toc()
-            loc_loss += loss_l.data[0]
-            conf_loss += loss_c.data[0]
-
+            loc_loss += loss_l.item()
+            conf_loss += loss_c.item()
+            time_all=_t_all.toc()
             # log per iter
-            log = '\r==>Train: || {iters:d}/{epoch_size:d} in {time:.3f}s [{prograss}] || loc_loss: {loc_loss:.4f} cls_loss: {cls_loss:.4f}\r'.format(
+            log = '\r==>Train: || {iters:d}/{epoch_size:d} in {time:.3f}/{all_time:.3f}s,  [{prograss}] || loc_loss: {loc_loss:.4f} cls_loss: {cls_loss:.4f}\r'.format(
                     prograss='#'*int(round(10*iteration/epoch_size)) + '-'*int(round(10*(1-iteration/epoch_size))), iters=iteration, epoch_size=epoch_size,
-                    time=time, loc_loss=loss_l.data[0], cls_loss=loss_c.data[0])
+                    time=time, all_time=time_all, loc_loss=loss_l.item(), cls_loss=loss_c.item())
 
             sys.stdout.write(log)
             sys.stdout.flush()
 
+        _t_all2.toc()
         # log per epoch
         sys.stdout.write('\r')
         sys.stdout.flush()
         lr = optimizer.param_groups[0]['lr']
         log = '\r==>Train: || Total_time: {time:.3f}s || loc_loss: {loc_loss:.4f} conf_loss: {conf_loss:.4f} || lr: {lr:.6f}\n'.format(lr=lr,
-                time=_t.total_time, loc_loss=loc_loss/epoch_size, conf_loss=conf_loss/epoch_size)
+                time=_t_all2.total_time, loc_loss=loc_loss/epoch_size, conf_loss=conf_loss/epoch_size)
         sys.stdout.write(log)
         sys.stdout.flush()
 
@@ -323,6 +341,57 @@ class Solver(object):
         writer.add_scalar('Train/loc_loss', loc_loss/epoch_size, epoch)
         writer.add_scalar('Train/conf_loss', conf_loss/epoch_size, epoch)
         writer.add_scalar('Train/lr', lr, epoch)
+
+    def check_priors(self, images, targets, writer):
+        """targets is the list , len is batch no"""
+        mean = torch.Tensor(self.cfg.DATASET.PIXEL_MEANS).cpu()
+        priors = self.priors
+        for idx, truths in enumerate(targets):
+            truths=truths[:,:4].cuda()
+            overlaps = jaccard(
+                truths,
+                point_form(priors)
+            )
+            # [1,num_objects] best prior for each ground truth
+            best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
+            # [1,num_priors] best ground truth for each prior
+            #best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
+
+            best_prior_overlap=best_prior_overlap.squeeze(1)
+            best_prior_idx = best_prior_idx.squeeze(1)
+            mask = best_prior_overlap < 0.4
+
+            number = mask.sum()
+            if number <=0:
+                continue
+
+            print(">>>>find bad anchor: %d <<<<"%(number))
+
+            image = images[idx]
+            image = image.permute(1,2,0)
+            image = image + mean
+            image = image.byte()
+            npimage = image.numpy()
+            npimage = npimage[..., ::-1]
+            #bad_anchors=priors[mask]
+            bad_box =  truths[mask]
+
+            bad_prior_idx=best_prior_idx[mask]
+            bad_prior = point_form(priors[bad_prior_idx])
+
+            def draw_bbox(npimage, bbxs_tensor, color=(0, 255, 0)):
+                npimage = npimage.copy()
+                bbxs_tensor[:, ::2] *= npimage.shape[1]
+                bbxs_tensor[:, 1::2] *= npimage.shape[0]
+                bbxs = bbxs_tensor.cpu().numpy().astype(np.int32)
+                for bbx in bbxs:
+                    cv2.rectangle(npimage, (bbx[0], bbx[1]), (bbx[2], bbx[3]), color, 2)
+                return npimage
+
+
+            image_show = draw_bbox(npimage, bad_box)
+            image_show = draw_bbox(image_show, bad_prior, color=(0,0,0))
+            writer.add_image('check_anchor_box/input_image', image_show, 0, dataformats='HWC')
 
 
     def eval_epoch(self, model, data_loader, detector, criterion, writer, epoch, use_gpu):
@@ -344,12 +413,14 @@ class Solver(object):
         for iteration in iter(range((epoch_size))):
         # for iteration in iter(range((10))):
             images, targets = next(batch_iterator)
+            #self.check_priors(images, targets, writer)
             if use_gpu:
                 images = Variable(images.cuda())
                 targets = [Variable(anno.cuda(), volatile=True) for anno in targets]
             else:
                 images = Variable(images)
                 targets = [Variable(anno, volatile=True) for anno in targets]
+
 
             _t.tic()
             # forward
@@ -368,13 +439,13 @@ class Solver(object):
             # evals
             label, score, npos, gt_label = cal_tp_fp(detections, targets, label, score, npos, gt_label)
             size = cal_size(detections, targets, size)
-            loc_loss += loss_l.data[0]
-            conf_loss += loss_c.data[0]
+            loc_loss += loss_l.item()
+            conf_loss += loss_c.item()
 
             # log per iter
             log = '\r==>Eval: || {iters:d}/{epoch_size:d} in {time:.3f}s [{prograss}] || loc_loss: {loc_loss:.4f} cls_loss: {cls_loss:.4f}\r'.format(
                     prograss='#'*int(round(10*iteration/epoch_size)) + '-'*int(round(10*(1-iteration/epoch_size))), iters=iteration, epoch_size=epoch_size,
-                    time=time, loc_loss=loss_l.data[0], cls_loss=loss_c.data[0])
+                    time=time, loc_loss=loss_l.item(), cls_loss=loss_c.item())
 
             sys.stdout.write(log)
             sys.stdout.flush()
@@ -476,9 +547,9 @@ class Solver(object):
             img = dataset.pull_image(i)
             scale = [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
             if use_gpu:
-                images = Variable(dataset.preproc(img)[0].unsqueeze(0).cuda(), volatile=True)
+                images = Variable(dataset.preproc(img)[0].unsqueeze(0).cuda(), requires_grad=False)
             else:
-                images = Variable(dataset.preproc(img)[0].unsqueeze(0), volatile=True)
+                images = Variable(dataset.preproc(img)[0].unsqueeze(0), requires_grad=False)
 
             _t.tic()
             # forward
