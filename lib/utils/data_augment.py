@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import random
 import math
+import imgaug.augmenters as iaa
 from lib.utils.box_utils import matrix_iou
 
 def _crop(image, boxes, labels):
@@ -23,7 +24,7 @@ def _crop(image, boxes, labels):
     while True:
         mode = random.choice((
             None,
-            (0.008, 0.25),
+            (0.004, 0.25),
             (0.02, 0.25),
             (0.05, 0.25),
             (0.1,  0.30),
@@ -44,10 +45,16 @@ def _crop(image, boxes, labels):
             max_iou = float('inf')
 
         for _ in range(50):
-            scale = random.uniform(0.67, 1.)
-            min_ratio = max(0.85, scale*scale)
-            max_ratio = min(1/0.85, 1. / scale / scale)
-            ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
+            #scale = random.uniform(0.50, 1.)
+            #it is very strange, pmi ukraine has stock counter function,
+            #the sku in such image is quite big, so need to crop out a small portion
+            #and resize it to [800,600] to make a fake big sku in training stage.
+            scale = random.uniform(0.40, 1.)
+            #min_ratio = max(0.85, scale*scale)
+            #max_ratio = min(1/0.85, 1. / scale / scale)
+            #ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
+            #just keep aspect ratio
+            ratio = 1.0
             w = int(scale * ratio * width)
             h = int((scale / ratio) * height)
 
@@ -63,9 +70,9 @@ def _crop(image, boxes, labels):
 
             image_t = image[roi[1]:roi[3], roi[0]:roi[2]]
 
-            centers = (boxes[:, :2] + boxes[:, 2:]) / 2
-            mask = np.logical_and(roi[:2] < centers, centers < roi[2:]) \
-                     .all(axis=1)
+            #centers = (boxes[:, :2] + boxes[:, 2:]) / 2
+            #mask = np.logical_and(roi[:2] < centers, centers < roi[2:]).all(axis=1)
+            mask = (iou>0.0001).squeeze()
             boxes_t = boxes[mask].copy()
             labels_t = labels[mask].copy()
             if len(boxes_t) == 0:
@@ -81,11 +88,11 @@ def _crop(image, boxes, labels):
             new_area = (boxes_t[:, 2] - boxes_t[:, 0]) * (boxes_t[:, 3] - boxes_t[:, 1])
             old_area = (old_boxes_t[:, 2] - old_boxes_t[:, 0]) * (old_boxes_t[:, 3] - old_boxes_t[:, 1])
             iou = new_area/ old_area
-            mask= iou>0.7
+            mask= iou >=0.8
             bad_boxes_t=boxes_t[~mask]
             for box in bad_boxes_t:
                 #print("black out the box because iou <0.7")
-                image_t[int(box[1]):int(box[3]), int(box[0]):int(box[2])] = 0
+                image_t[int(box[1]):int(box[3]), int(box[0]):int(box[2])] = random.randint(0,255)
 
             boxes_t = boxes_t[mask]
             labels_t = labels_t [mask]
@@ -96,29 +103,38 @@ def _crop(image, boxes, labels):
 def _distort(image):
     def _convert(image, alpha=1, beta=0):
         tmp = image.astype(float) * alpha + beta
-        tmp[tmp < 0] = 0
-        tmp[tmp > 255] = 255
+        tmp = np.uint8(np.clip(tmp,0,255))
+        #tmp[tmp < 0] = 0
+        #tmp[tmp > 255] = 255
         image[:] = tmp
 
     image = image.copy()
+    need_convert=False
+    beta=0
+    alpha=1
+    if random.randrange(2):
+        beta=random.uniform(-10, 20)
+        need_convert=True
 
     if random.randrange(2):
-        _convert(image, beta=random.uniform(-32, 32))
+        alpha=random.uniform(0.8, 1.3)
+        need_convert=True
 
+    if need_convert:
+       _convert(image, alpha=alpha, beta=beta)
+
+    #dont change hue
+    #if random.randrange(2):
+    #    tmp = image[:, :, 0].astype(int) + random.randint(-18, 18)
+    #    tmp %= 180
+    #    image[:, :, 0] = tmp
+
+    # change saturation
     if random.randrange(2):
-        _convert(image, alpha=random.uniform(0.5, 1.5))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        _convert(image[:, :, 1], alpha=random.uniform(0.8, 1.3))
+        image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
 
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    if random.randrange(2):
-        tmp = image[:, :, 0].astype(int) + random.randint(-18, 18)
-        tmp %= 180
-        image[:, :, 0] = tmp
-
-    if random.randrange(2):
-        _convert(image[:, :, 1], alpha=random.uniform(0.5, 1.5))
-
-    image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
 
     return image
 
@@ -129,10 +145,10 @@ def _expand(image, boxes, fill, p):
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1,1.3)
+        scale = random.uniform(1, 2.0)
 
-        min_ratio = max(0.7, 1./scale/scale)
-        max_ratio = min(1.4, scale*scale)
+        min_ratio = max(0.95, 1./scale/scale)
+        max_ratio = min(1.05, scale*scale)
         ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
         ws = scale*ratio
         hs = scale/ratio
@@ -166,6 +182,7 @@ def _mirror(image, boxes):
         boxes = boxes.copy()
         boxes[:, 0::2] = width - boxes[:, 2::-2]
     return image, boxes
+
 
 
 def _elastic(image, p, alpha=None, sigma=None, random_state=None):
@@ -216,9 +233,11 @@ def preproc_for_test_with_resized_img(resized_image, mean):
 
 def draw_bbox(image, bbxs, color=(0, 255, 0)):
     img = image.copy()
+    #img = img[...,::-1]
     bbxs = np.array(bbxs).astype(np.int32)
     for bbx in bbxs:
         cv2.rectangle(img, (bbx[0], bbx[1]), (bbx[2], bbx[3]), color, 5)
+    img = img[..., ::-1]
     return img
 
 class preproc(object):
@@ -229,6 +248,36 @@ class preproc(object):
         self.p = p
         self.writer = writer # writer used for tensorboard visualization
         self.epoch = 0
+        if p>=0 and p <=1:
+            sometimes = lambda aug: iaa.Sometimes(p, aug)
+            self.seq = iaa.Sequential(
+                [
+                    # Blur each image with varying strength using
+                    # gaussian blur (sigma between 0 and 3.0),
+                    # average/uniform blur (kernel size between 2x2 and 7x7)
+                    # median blur (kernel size between 3x3 and 11x11).
+                    iaa.OneOf([
+                        iaa.GaussianBlur(sigma=(0, 1.0)),
+                        iaa.AverageBlur(k=(2, 5)),
+                        #iaa.MedianBlur(k=(2, 4)),
+                    ]),
+                    # Sharpen each image, overlay the result with the original
+                    # image using an alpha between 0 (no sharpening) and 1
+                    # (full sharpening effect).
+                    sometimes(iaa.Sharpen(alpha=(0, 0.5), lightness=(0.75, 1.5))),
+                    # Add gaussian noise to some images.
+                    #sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5)),
+                    sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.01*255), per_channel=0.5)),
+                    # Add a value of -5 to 5 to each pixel.
+                    #sometimes(iaa.Add((-5, 5), per_channel=0.5)),
+                    # Change brightness of images (80-120% of original value).
+                    #sometimes(iaa.Multiply((0.8, 1.2), per_channel=0.5)),
+                    # Improve or worsen the contrast of images.
+                    sometimes(iaa.ContrastNormalization((0.8, 1.2))),
+                ],
+                # do all of the above augmentations in random order
+                random_order=True
+            )
 
     def __call__(self, image, targets=None):
         # some bugs 
@@ -297,15 +346,31 @@ class preproc(object):
         #    image_show = draw_bbox(image_t, boxes)
         #    self.writer.add_image('preprocess/mirror_image', image_show, self.epoch)
 
-        # only write the preprocess step for the first image
-        if self.writer is not None:
-            # print('image adding')
-            self.release_writer()
 
         height, width, _ = image_t.shape
         image_t = preproc_resize(image_t, self.w_h_resize)
         if not distorted:
             image_t = _distort(image_t)
+            if self.writer is not None:
+                boxes1 = boxes.copy()
+                boxes1[:, 0::2] *= self.w_h_resize[0]/width
+                boxes1[:, 1::2] *= self.w_h_resize[1]/height
+                image_show = draw_bbox(image_t, boxes1)
+                self.writer.add_image('preprocess/distort_image', image_show, self.epoch, dataformats='HWC')
+
+        seq_det = self.seq.to_deterministic()
+        image_t = seq_det.augment_images([image_t])[0]
+        if self.writer is not None:
+            boxes1 = boxes.copy()
+            boxes1[:, 0::2] *= self.w_h_resize[0]/width
+            boxes1[:, 1::2] *= self.w_h_resize[1]/height
+            image_show = draw_bbox(image_t, boxes1)
+            self.writer.add_image('preprocess/iaa_image', image_show, self.epoch, dataformats='HWC')
+
+        # only write the preprocess step for the first image
+        if self.writer is not None:
+            # print('image adding')
+            self.release_writer()
 
         image_t = preproc_for_test_with_resized_img(image_t, self.means)
 
@@ -327,7 +392,28 @@ class preproc(object):
         targets_t = np.hstack((boxes_t,labels_t))
 
         return torch.from_numpy(image_t), targets_t
-    
+
+    def _imgaug_(self, image, targets=None):
+        if self.p == -2: # abs_test
+            targets = np.zeros((1,5))
+            image = preproc_for_test(image, self.w_h_resize, self.means)
+            return torch.from_numpy(image), targets
+
+        boxes = targets[:, :-1].copy()
+        labels = targets[:, -1].copy()
+
+        if self.p == -1:  # eval
+            height, width, _ = image.shape
+            boxes[:, 0::2] /= width
+            boxes[:, 1::2] /= height
+            labels = np.expand_dims(labels, 1)
+            targets = np.hstack((boxes, labels))
+            image = preproc_for_test(image, self.w_h_resize, self.means)
+            return torch.from_numpy(image), targets
+
+
+
+
     def add_writer(self, writer, epoch=None):
         self.writer = writer
         self.epoch = epoch if epoch is not None else self.epoch + 1

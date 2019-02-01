@@ -14,7 +14,8 @@ MODEL:
   #         1/38      1/19        1/10      1/5         1/3
   #          0.025    0.08      0.16        0.32
   #scale  height, width
-  SIZES: [[15, 15], [48, 48], [96, 96], [192, 192], [320, 320]]
+  #SIZES: [[15, 15], [48, 48], [96, 96], [192, 192], [320, 320]]
+  SIZES: [[26, 26], [48, 48], [96, 96], [192, 192], [320, 320]]
   #SIZES: [[60, 60], [105, 105], [150, 150], [195, 195], [240, 240], [285, 285],[330,330]]
   #ASPECT_RATIOS: [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2], [1, 2]]
   #w/h
@@ -22,7 +23,7 @@ MODEL:
                   [2.12, 0.887, 0.51]]
 
 TRAIN:
-  MAX_EPOCHS: 500
+  MAX_EPOCHS: 400
   CHECKPOINTS_EPOCHS: 1
   BATCH_SIZE: 12
   TRAINABLE_SCOPE: 'base,extras,loc,conf'
@@ -63,9 +64,9 @@ DATASET:
   PROB: 0.6
   NUM_WORKERS: 16
 
-EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_3boxes'
-LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes'
+EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes'
+LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
-RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
-#PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
+#RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
+PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
 PHASE: ['train']

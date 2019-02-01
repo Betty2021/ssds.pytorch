@@ -17,17 +17,22 @@ class PriorBox(object):
         self.clip = clip
         # scale value
         if isinstance(scale[0], list):
-            # get min of the result
-            self.scales = [min(s[0] / self.image_size[0], s[1] / self.image_size[1]) for s in scale]
+            # get max of the result
+            self.scales = [max(s[0] / self.image_size[0], s[1] / self.image_size[1]) for s in scale]
         elif isinstance(scale[0], float) and len(scale) == 2:
             num_layers = len(feature_maps)
             min_scale, max_scale = scale
             self.scales = [min_scale + (max_scale - min_scale) * i / (num_layers - 1) for i in range(num_layers)] + [1.0]
+        else: #[0.025,0.08, 0.16, 0.32, 0.6]
+            self.scales = scale   
         
         if archor_stride:
             self.steps = [(steps[0] / self.image_size[0], steps[1] / self.image_size[1]) for steps in archor_stride] 
         else:
+            print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
             self.steps = [(1/f_h, 1/f_w) for f_h, f_w in feature_maps]
+            print(self.steps)
+            print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
 
         if archor_offest:
             self.offset = [[offset[0] / self.image_size[0], offset[1] * self.image_size[1]] for offset in archor_offest] 
@@ -37,7 +42,6 @@ class PriorBox(object):
     def forward(self):
         mean = []
         aspect=self.image_size[1]/self.image_size[0] # w/h
-        aspect_sqrt=sqrt(aspect)
         #aspect=1.0
         # l = 0
         for k, f in enumerate(self.feature_maps):
@@ -48,11 +52,11 @@ class PriorBox(object):
 
                 # rest of aspect ratios
                 for ar in self.aspect_ratios[k]:
-                    ar_sqrt = sqrt(ar/aspect)
-                    mean += [cx, cy, s_k*ar_sqrt, s_k/ar_sqrt]
+                    ar_sqrt = sqrt(ar)
+                    mean += [cx, cy, s_k*ar_sqrt, s_k*aspect/ar_sqrt]
 
-                #s_k_prime = sqrt(s_k * self.scales[k + 1])
-                #mean += [cx, cy, s_k_prime/aspect_sqrt, s_k_prime*aspect_sqrt]
+                s_k_prime = sqrt(s_k * self.scales[k + 1])
+                mean += [cx, cy, s_k_prime, s_k_prime*aspect]
 
                     # if isinstance(ar, int):
                     #     if ar == 1:

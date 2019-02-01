@@ -34,8 +34,10 @@ class NPSet(data.Dataset):
         self.preproc = preproc
         self.name, self.name_to_seq, self.seq_to_name, self.name_to_desc= self._parse_templates()
         self.ids, self.photo_dir, self.anno_dir = self._find_image_annotation_pair()
+        #print("id of 181004142415 is ", self.ids.index("OEX_181004142415.jpg") )
         if image_sets and isinstance(image_sets,list) and isinstance(image_sets[0],int) :
             self.ids=self.ids*image_sets[0]
+        self.num_classes=len(self.seq_to_name)
         #self.images, self.targets=self.read_all_images()
 
     def _parse_templates(self):
@@ -236,8 +238,8 @@ class NPSet(data.Dataset):
 
     def _write_voc_results_file(self, all_boxes):
         for cls_ind, cls in enumerate(self.seq_to_name):
-            cls_ind = cls_ind
-            if cls == '__background__':
+            #cls_ind = cls_ind
+            if cls == 'background' or cls_ind == 0:
                 continue
             #print('Writing {} VOC results file'.format(cls))
             filename = self._get_voc_results_file_template().format(cls)

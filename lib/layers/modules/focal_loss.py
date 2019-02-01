@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from lib.utils.box_utils import match, log_sum_exp, one_hot_embedding
+from lib.utils.box_utils import match, match_with_ignorance, log_sum_exp, one_hot_embedding
 
 # I do not fully understand this part, It completely based on https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
 
@@ -51,19 +51,22 @@ class FocalLoss(nn.Module):
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
         loc_data, conf_data = predictions
-        num = loc_data.size(0)
+        batch_num = loc_data.size(0)
         priors = self.priors
         # priors = priors[:loc_data.size(1), :]
         num_priors = (priors.size(0))
         
         # match priors (default boxes) and ground truth boxes
-        loc_t = torch.Tensor(num, num_priors, 4)
-        conf_t = torch.LongTensor(num, num_priors)
-        for idx in range(num):
+        loc_t = torch.Tensor(batch_num, num_priors, 4)
+        conf_t = torch.LongTensor(batch_num, num_priors)
+        for idx in range(batch_num):
             truths = targets[idx][:,:-1].data
             labels = targets[idx][:,-1].data
             defaults = priors.data
-            match(self.threshold,truths,defaults,self.variance,labels,loc_t,conf_t,idx)
+            #match(self.threshold,truths,defaults,self.variance,labels,loc_t,conf_t,idx)
+            match_with_ignorance(self.threshold,self.unmatched_threshold, \
+                                 truths,defaults,self.variance,labels,loc_t,conf_t,idx)
+
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
@@ -84,12 +87,16 @@ class FocalLoss(nn.Module):
 
         # Confidence Loss (Focal loss)
         # Shape: [batch,num_priors,1]
-        loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t.view(-1,1))
+        #loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t.view(-1,1))
+        loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t)
+        #loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t.view(-1,1))
 
         return loss_l,loss_c
 
     def focal_loss(self, inputs, targets):
-        '''Focal loss.
+        '''
+        targets: [batch_num, anchor_num], element type is long, <0 means ignore it, 0 mean bg, 1,2,3...is  class_num
+        Focal loss.
         mean of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
         '''
         N = inputs.size(0)
@@ -99,6 +106,13 @@ class FocalLoss(nn.Module):
         class_mask = inputs.data.new(N, C).fill_(0)
         class_mask = Variable(class_mask)
         ids = targets.view(-1, 1)
+
+        #in the
+        ignore_mask=ids<0
+        ids[ignore_mask]=0
+        loss_mask = ids>=0
+
+        #get one hot
         class_mask.scatter_(1, ids.data, 1.)
 
         if inputs.is_cuda and not self.alpha.is_cuda:
@@ -107,7 +121,9 @@ class FocalLoss(nn.Module):
         probs = (P*class_mask).sum(1).view(-1,1)
         log_p = probs.log()
 
-        batch_loss = -alpha*(torch.pow((1-probs), self.gamma))*log_p 
+        batch_loss = -alpha*(torch.pow((1-probs), self.gamma))*log_p
 
-        loss = batch_loss.sum()/48
+        batch_loss_2=batch_loss[loss_mask]
+
+        loss = batch_loss_2.sum()*(loss_mask.sum().float()/(ids.shape[0]*targets.shape[0]))
         return loss

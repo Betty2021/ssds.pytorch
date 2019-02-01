@@ -41,8 +41,17 @@ class Solver(object):
         self.test_loader = load_data(cfg.DATASET, 'test') if 'test' in cfg.PHASE else None
         self.visualize_loader = load_data(cfg.DATASET, 'visualize') if 'visualize' in cfg.PHASE else None
 
-        # Build model
-        print('===> Building model')
+        if self.train_loader and hasattr(self.train_loader.dataset, "num_classes"):
+            cfg.POST_PROCESS.NUM_CLASSES = cfg.MATCHER.NUM_CLASSES=cfg.MODEL.NUM_CLASSES=self.train_loader.dataset.num_classes
+        elif self.eval_loader and hasattr(self.eval_loader.dataset, "num_classes"):
+            cfg.POST_PROCESS.NUM_CLASSES = cfg.MATCHER.NUM_CLASSES=cfg.MODEL.NUM_CLASSES=self.eval_loader.dataset.num_classes
+        elif self.test_loader and hasattr(self.test_loader.dataset, "num_classes"):
+            cfg.POST_PROCESS.NUM_CLASSES = cfg.MATCHER.NUM_CLASSES=cfg.MODEL.NUM_CLASSES = self.test_loader.dataset.num_classes
+        elif self.visualize_loader and hasattr(self.visualize_loader.dataset, "num_classes"):
+            cfg.POST_PROCESS.NUM_CLASSES = cfg.MATCHER.NUM_CLASSES=cfg.MODEL.NUM_CLASSES = self.visualize_loader.dataset.num_classes
+
+         # Build model
+        print('===> Building model, num_classes is '+str(cfg.MODEL.NUM_CLASSES))
         self.model, self.priorbox = create_model(cfg.MODEL)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.detector = Detect(cfg.POST_PROCESS, self.priors)
@@ -593,7 +602,8 @@ class Solver(object):
     def visualize_epoch(self, model, data_loader, priorbox, writer, epoch, use_gpu):
         model.eval()
 
-        img_index = random.randint(0, len(data_loader.dataset)-1)
+        #img_index = random.randint(0, len(data_loader.dataset)-1)
+        img_index = 1
 
         # get img
         image = data_loader.dataset.pull_image(img_index)

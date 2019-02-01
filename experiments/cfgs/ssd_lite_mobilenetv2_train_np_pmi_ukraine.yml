@@ -9,18 +9,21 @@ MODEL:
   #          38        19       10          5
   #STEPS: [[16, 16], [32, 32], [64, 64], [100, 100], [150, 150], [300, 300]]
   #anchor_stride
-  STEPS: [[16, 16], [32, 32], [64, 64], [100, 100]]
+  #STEPS: [[16, 16], [32, 32], [64, 64], [100, 100]]
   #SIZES: [[45, 45], [90, 90], [135, 135], [180, 180], [225, 225], [270, 270], [315, 315]]
   #         1/38      1/19        1/10      1/5         1/3
   #          0.025    0.08      0.16        0.32
   #scale  height, width
   #SIZES: [[15, 15], [48, 48], [96, 96], [192, 192], [320, 320]]
-  SIZES: [[26, 26], [48, 48], [96, 96], [192, 192], [320, 320]]
+  #SIZES: [[20, 20], [48, 48], [96, 96], [192, 192], [320, 320]]
+  #600/38*1.414       
+  #SIZES: [[22, 22], [44, 44], [84, 84], [168, 168], [300, 300]]
+  SIZES: [0.025, 0.08, 0.16, 0.32, 0.6]
   #SIZES: [[60, 60], [105, 105], [150, 150], [195, 195], [240, 240], [285, 285],[330,330]]
   #ASPECT_RATIOS: [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2], [1, 2]]
   #w/h
-  ASPECT_RATIOS: [[2.12, 0.887, 0.51], [2.12, 0.887, 0.51], [2.12, 0.887, 0.51],
-                  [2.12, 0.887, 0.51]]
+  ASPECT_RATIOS: [[1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821],
+                  [1.01374209, 1.43088333, 1.20318821]]
 
 TRAIN:
   MAX_EPOCHS: 400
@@ -40,42 +43,33 @@ TRAIN:
     WEIGHT_DECAY: 0.0001
   LR_SCHEDULER:
     SCHEDULER: SGDR
-    WARM_UP_EPOCHS: 100
+    WARM_UP_EPOCHS: 120
 
 TEST:
   BATCH_SIZE: 12
-  TEST_SCOPE: [390, 400]
+  TEST_SCOPE: [1540, 1560]
 
 MATCHER:
-  MATCHED_THRESHOLD: 0.5
-  UNMATCHED_THRESHOLD: 0.5
+  MATCHED_THRESHOLD: 0.6
+  UNMATCHED_THRESHOLD: 0.4
   NEGPOS_RATIO: 3
 
 POST_PROCESS:
-  SCORE_THRESHOLD: 0.1
+  SCORE_THRESHOLD: 0.01
   IOU_THRESHOLD: 0.6
   MAX_DETECTIONS: 200
 
 DATASET:
   DATASET: 'np'
-  DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git_resized'
-  TRAIN_SETS: [20]
+  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
+  TRAIN_SETS: [2]
   TEST_SETS:  [1]
   PROB: 0.6
   NUM_WORKERS: 16
 
-#EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_ohml3'
-#LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_ohml3'
+EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine3'
+LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine3'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
-#RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_ohml3/ssd_lite_mobilenet_v2_np_epoch_130.pth'
-#PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
-
-#EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_3boxes'
-#LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_3boxes'
-##RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx/ssd_lite_mobilenet_v2_np_epoch_200.pth'
-#PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
-EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes'
-LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes'
-#RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
-RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
-PHASE: ['test']
+#RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
+PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
+PHASE: ['train']
