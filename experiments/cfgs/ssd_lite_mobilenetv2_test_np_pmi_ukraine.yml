@@ -2,6 +2,8 @@ MODEL:
   SSDS: ssd_lite
   NETS: mobilenet_v2
   IMAGE_SIZE: [800, 600] #height, width
+  #IMAGE_SIZE: [960, 720] #height, width
+  #IMAGE_SIZE: [960, 720] #height, width
   NUM_CLASSES: 37
   #FEATURE_LAYER: [[13, 17, 'S', 'S', 'S', 'S'], [96, 320, 512, 256, 256, 128]]
   FEATURE_LAYER: [[13, 17, 'S','S' ], [96, 320, 512,256]]
@@ -18,7 +20,11 @@ MODEL:
   #SIZES: [[20, 20], [48, 48], [96, 96], [192, 192], [320, 320]]
   #SIZES: [[22, 22], [44, 44], [84, 84], [168, 168], [300, 300]]
   # 
-  SIZES: [0.025, 0.08, 0.16, 0.32, 0.6]
+  #SIZES: [0.03, 0.08, 0.16, 0.32, 0.6]
+  SIZES: [0.035, 0.08, 0.16, 0.32, 0.6]
+  #SIZES: [0.037, 0.08, 0.16, 0.32, 0.6]
+  #SIZES: [0.03083333333333333, 0.06666666666666667, 0.13333333333333333, 0.26666666666666666, 0.5]
+  #SIZES: [0.025     , 0.06666667, 0.13333333, 0.26666667, 0.5]
   #SIZES: [[60, 60], [105, 105], [150, 150], [195, 195], [240, 240], [285, 285],[330,330]]
   #ASPECT_RATIOS: [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2], [1, 2]]
   #w/h
@@ -46,8 +52,7 @@ TRAIN:
     WARM_UP_EPOCHS: 100
 
 TEST:
-  BATCH_SIZE: 12
-  TEST_SCOPE: [390, 400]
+  TEST_SCOPE: [298, 300]
 
 MATCHER:
   MATCHED_THRESHOLD: 0.5
@@ -61,8 +66,8 @@ POST_PROCESS:
 
 DATASET:
   DATASET: 'np'
-  #DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git/field_test_20181004_resized'
-  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git/field_test_20181004'
+  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git/field_test_20181004_resized'
+  #DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git/field_test_20181004'
   #DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git'
   #DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
   TRAIN_SETS: [2]
@@ -71,10 +76,18 @@ DATASET:
   NUM_WORKERS: 16
 
 #EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine3_good_bak'
-EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine3'
-LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine3'
+#EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine8'
+#LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_ukraine8'
+EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl2_ukraine8'
+LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl2_ukraine8'
+#EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_olhm_ukraine1'
+#LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_olhm_ukraine1'
+
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
 #RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
 PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
 #PHASE: ['visualize']
 PHASE: ['test']
+
+
+#tensorboard --logdir=a_025:sd_mobilenet_v2_np_4l_fl2_ukraine3,a_075:ssd_mobilenet_v2_np_4l_fl2_ukraine4,a_060:ssd_mobilenet_v2_np_4l_fl2_ukraine5,a_5x060:ssd_mobilenet_v2_np_4l_fl2_ukraine6

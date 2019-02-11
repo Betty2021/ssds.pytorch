@@ -116,7 +116,7 @@ def viz_prior_box(writer, prior_box, image=None, epoch=0):
     elif isinstance(image, str):
         image = cv2.imread(image, -1)
     image = cv2.resize(image, (prior_box.image_size[1], prior_box.image_size[0]))
-    aspect = prior_box.image_size[1] / prior_box.image_size[1] # w/h
+    aspect = prior_box.image_size[1] / prior_box.image_size[0] # w/h
     for layer, f in enumerate(prior_box.feature_maps):
         bbxs = []
         image_show = image.copy()
@@ -130,8 +130,8 @@ def viz_prior_box(writer, prior_box, image=None, epoch=0):
             # aspect_ratio: 1 Min size
             s_k = prior_box.scales[layer]
             #bbxs += [cx, cy, s_k, s_k]
-            ar_sqrt = math.sqrt(prior_box.aspect_ratios[layer][0]/aspect)
-            bbxs += [cx, cy, s_k * ar_sqrt, s_k / ar_sqrt]
+            ar_sqrt = math.sqrt(prior_box.aspect_ratios[layer][0])
+            bbxs += [cx, cy, s_k * ar_sqrt, s_k*aspect/ar_sqrt]
             # # aspect_ratio: 1 Max size
             # # rel size: sqrt(s_k * s_(k+1))
             # s_k_prime = sqrt(s_k * self.scales[k+1])

@@ -63,13 +63,18 @@ class Solver(object):
             print('Number of GPU available', torch.cuda.device_count())
             self.model.cuda()
             self.priors.cuda()
-            cudnn.benchmark = True
-            #if torch.cuda.device_count() > 1:
-                #print('-----DataParallel-----------')
+            if torch.cuda.device_count() > 1:
+                print('-----DataParallel-----------')
+                self.model = torch.nn.DataParallel(self.model)
+                self.model.cuda()
+                #self.dp_model = torch.nn.DataParallel(self.model)
                 #self.model = torch.nn.DataParallel(self.model).module
+                #self.model = self.dp_model.module
+
+            cudnn.benchmark = True
 
         # Print the model architecture and parameters
-        print('Model architectures:\n{}\n'.format(self.model))
+        #print('Model architectures:\n{}\n'.format(self.model))
 
         # print('Parameters and size:')
         # for name, param in self.model.named_parameters():
@@ -102,7 +107,8 @@ class Solver(object):
         else:
             filename = self.checkpoint_prefix + '_epoch_{:d}'.format(epochs) + '.pth'
         filename = os.path.join(self.output_dir, filename)
-        torch.save(self.model.state_dict(), filename)
+        real_model = self.get_real_model()
+        torch.save(real_model.state_dict(), filename)
         with open(os.path.join(self.output_dir, 'checkpoint_list.txt'), 'a') as f:
             f.write('epoch {epoch:d}: {filename}\n'.format(epoch=epochs, filename=filename))
         print('Wrote snapshot to: {:s}'.format(filename))
@@ -163,11 +169,13 @@ class Solver(object):
                         break
             checkpoint = pretrained_dict
 
-        pretrained_dict = {k: v for k, v in checkpoint.items() if k in self.model.state_dict()}
+        real_model = self.get_real_model()
+        #real_model = self.model.module if self.model.module else self.model
+        pretrained_dict = {k: v for k, v in checkpoint.items() if k in real_model.state_dict()}
         # print("=> Resume weigths:")
         # print([k for k, v in list(pretrained_dict.items())])
 
-        checkpoint = self.model.state_dict()
+        checkpoint = real_model.state_dict()
 
         unresume_dict = set(checkpoint)-set(pretrained_dict)
         if len(unresume_dict) != 0:
@@ -175,8 +183,7 @@ class Solver(object):
             print(unresume_dict)
 
         checkpoint.update(pretrained_dict)
-
-        return self.model.load_state_dict(checkpoint)
+        return real_model.load_state_dict(checkpoint)
 
 
     def find_previous(self):
@@ -218,18 +225,24 @@ class Solver(object):
 
         start_epoch = 0
         return start_epoch
+    def get_real_model(self):
+        if hasattr(self.model,"module"):
+            return self.model.module
+        else:
+            return  self.model
 
     def trainable_param(self, trainable_scope):
-        for param in self.model.parameters():
+        real_model = self.get_real_model()
+        for param in real_model.parameters():
             param.requires_grad = False
 
         trainable_param = []
         for module in trainable_scope.split(','):
-            if hasattr(self.model, module):
+            if hasattr(real_model, module):
                 # print(getattr(self.model, module))
-                for param in getattr(self.model, module).parameters():
+                for param in getattr(real_model, module).parameters():
                     param.requires_grad = True
-                trainable_param.extend(getattr(self.model, module).parameters())
+                trainable_param.extend(getattr(real_model, module).parameters())
 
         return trainable_param
 
@@ -602,8 +615,8 @@ class Solver(object):
     def visualize_epoch(self, model, data_loader, priorbox, writer, epoch, use_gpu):
         model.eval()
 
-        #img_index = random.randint(0, len(data_loader.dataset)-1)
-        img_index = 1
+        img_index = random.randint(0, len(data_loader.dataset)-1)
+        #img_index = 1
 
         # get img
         image = data_loader.dataset.pull_image(img_index)

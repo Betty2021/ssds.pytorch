@@ -287,7 +287,8 @@ class NPSet(data.Dataset):
         confidence = np.array([float(x[-5]) for x in splitlines])
         BB = np.array([[float(z) for z in x[-4:]] for x in splitlines])
         image_ids = [" ".join(x[:-5]) for x in splitlines]
-
+        if BB.shape[0]==0:
+            return 1.0, 1.0, 1.0
         # sort by confidence
         sorted_ind = np.argsort(-confidence)
         sorted_scores = np.sort(-confidence)

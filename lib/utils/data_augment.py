@@ -14,17 +14,35 @@ import random
 import math
 import imgaug.augmenters as iaa
 from lib.utils.box_utils import matrix_iou
-
+#_FOR_PMI_UKRAINE=True
+_FOR_PMI_UKRAINE=False
 def _crop(image, boxes, labels):
     height, width, _ = image.shape
+    min_cropped_ratio=0.4 if _FOR_PMI_UKRAINE else 0.70
+    if len(boxes)== 0 or (len(boxes)==1 and labels[0]==0):
+        scale = random.uniform(0.70, 1.)
+        #just keep aspect ratio
+        #ratio = 1.0
+        scale = random.uniform(min_cropped_ratio, 1.)
+        min_ratio = max(0.8, scale*scale)
+        max_ratio = min(1/0.8, 1. / scale / scale)
+        ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
+        w = int(scale * ratio * width)
+        h = int((scale / ratio) * height)
+        l = random.randrange(width - w)
+        t = random.randrange(height - h)
+        roi = np.array((l, t, l + w, t + h))
+        image_t = image[roi[1]:roi[3], roi[0]:roi[2]]
+        return image_t, boxes, labels
 
-    if len(boxes)== 0:
+    area=np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
+    big_sku = np.max(area)>=0.02
+    if big_sku:
         return image, boxes, labels
-
     while True:
         mode = random.choice((
             None,
-            (0.004, 0.25),
+            (0.001, 0.25), #0.025*0.025=0.000625
             (0.02, 0.25),
             (0.05, 0.25),
             (0.1,  0.30),
@@ -49,12 +67,12 @@ def _crop(image, boxes, labels):
             #it is very strange, pmi ukraine has stock counter function,
             #the sku in such image is quite big, so need to crop out a small portion
             #and resize it to [800,600] to make a fake big sku in training stage.
-            scale = random.uniform(0.40, 1.)
-            #min_ratio = max(0.85, scale*scale)
-            #max_ratio = min(1/0.85, 1. / scale / scale)
-            #ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
+            scale = random.uniform(min_cropped_ratio, 1.)
+            min_ratio = max(0.8, scale*scale)
+            max_ratio = min(1/0.8, 1. / scale / scale)
+            ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
             #just keep aspect ratio
-            ratio = 1.0
+            #ratio = 1.0
             w = int(scale * ratio * width)
             h = int((scale / ratio) * height)
 
@@ -72,7 +90,7 @@ def _crop(image, boxes, labels):
 
             #centers = (boxes[:, :2] + boxes[:, 2:]) / 2
             #mask = np.logical_and(roi[:2] < centers, centers < roi[2:]).all(axis=1)
-            mask = (iou>0.0001).squeeze()
+            mask = (iou>(1/2400)).squeeze()  #ignore those skus whose occupation ratio <1/(40*60)
             boxes_t = boxes[mask].copy()
             labels_t = labels[mask].copy()
             if len(boxes_t) == 0:
@@ -88,7 +106,7 @@ def _crop(image, boxes, labels):
             new_area = (boxes_t[:, 2] - boxes_t[:, 0]) * (boxes_t[:, 3] - boxes_t[:, 1])
             old_area = (old_boxes_t[:, 2] - old_boxes_t[:, 0]) * (old_boxes_t[:, 3] - old_boxes_t[:, 1])
             iou = new_area/ old_area
-            mask= iou >=0.8
+            mask= iou >=0.65
             bad_boxes_t=boxes_t[~mask]
             for box in bad_boxes_t:
                 #print("black out the box because iou <0.7")
@@ -142,13 +160,24 @@ def _distort(image):
 def _expand(image, boxes, fill, p):
     if random.random() > p:
         return image, boxes
+    b_w = (boxes[:, 2] - boxes[:, 0])*1.
+    b_h = (boxes[:, 3] - boxes[:, 1])*1.
+
+    min_area=np.min(b_w * b_h)/(image.shape[0]*image.shape[1])
+    #if min_area< 1/40.0*1/50: #too small
+    #    return image, boxes
+    max_expand_ratio=2.0 if _FOR_PMI_UKRAINE else 1.4
+
+    max_pad_scale=np.clip(math.sqrt(min_area)/(1/33.0),1.0, max_expand_ratio)
+    if max_pad_scale <=1.0:
+        return image, boxes
 
     height, width, depth = image.shape
     for _ in range(50):
-        scale = random.uniform(1, 2.0)
+        scale = random.uniform(1.0, max_pad_scale)
 
-        min_ratio = max(0.95, 1./scale/scale)
-        max_ratio = min(1.05, scale*scale)
+        min_ratio = max(0.75, 1./scale/scale)
+        max_ratio = min(1/0.75, scale*scale)
         ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
         ws = scale*ratio
         hs = scale/ratio
@@ -220,13 +249,13 @@ def preproc_for_test(image, w_h_insize, mean):
     image -= mean
     return image.transpose(2, 0, 1)
 
-def preproc_resize(image, w_h_insize):
+def _preproc_resize(image, w_h_insize):
     interp_methods = [cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_NEAREST, cv2.INTER_LANCZOS4]
     interp_method = interp_methods[random.randrange(5)]
     image = cv2.resize(image, (w_h_insize[0], w_h_insize[1]),interpolation=interp_method)
     return image
 
-def preproc_for_test_with_resized_img(resized_image, mean):
+def _preproc_for_test_with_resized_img(resized_image, mean):
     image = resized_image.astype(np.float32)
     image -= mean
     return image.transpose(2, 0, 1)
@@ -267,7 +296,7 @@ class preproc(object):
                     sometimes(iaa.Sharpen(alpha=(0, 0.5), lightness=(0.75, 1.5))),
                     # Add gaussian noise to some images.
                     #sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5)),
-                    sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.01*255), per_channel=0.5)),
+                    sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.02*255), per_channel=0.5)),
                     # Add a value of -5 to 5 to each pixel.
                     #sometimes(iaa.Add((-5, 5), per_channel=0.5)),
                     # Change brightness of images (80-120% of original value).
@@ -292,8 +321,10 @@ class preproc(object):
         labels = targets[:,-1].copy()
         if len(boxes) == 0:
             targets = np.zeros((1,5))
-            image = preproc_for_test(image, self.w_h_resize, self.means) # some ground truth in coco do not have bounding box! weird!
-            return torch.from_numpy(image), targets
+            boxes = targets[:,:-1].copy()
+            labels = targets[:,-1].copy()
+             #image = preproc_for_test(image, self.w_h_resize, self.means) # some ground truth in coco do not have bounding box! weird!
+            #return torch.from_numpy(image), targets
         if self.p == -1: # eval
             height, width, _ = image.shape
             boxes[:, 0::2] /= width
@@ -348,7 +379,7 @@ class preproc(object):
 
 
         height, width, _ = image_t.shape
-        image_t = preproc_resize(image_t, self.w_h_resize)
+        image_t = _preproc_resize(image_t, self.w_h_resize)
         if not distorted:
             image_t = _distort(image_t)
             if self.writer is not None:
@@ -372,15 +403,17 @@ class preproc(object):
             # print('image adding')
             self.release_writer()
 
-        image_t = preproc_for_test_with_resized_img(image_t, self.means)
+        image_t = _preproc_for_test_with_resized_img(image_t, self.means)
 
         boxes = boxes.copy()
         boxes[:, 0::2] /= width
         boxes[:, 1::2] /= height
         b_w = (boxes[:, 2] - boxes[:, 0])*1.
         b_h = (boxes[:, 3] - boxes[:, 1])*1.
-        #mask_b= np.minimum(b_w, b_h) > 0.01
-        mask_b= (b_w*b_h) > 0.0003  #area should
+        #mask_b= np.minimum(b_w, b_h) > 0.015
+        area= b_w*b_h
+        mask_b= np.logical_and(area> 0.0003, area < 0.15)
+        #mask_b= (b_w*b_h) > 0.0003  #area should
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b].copy()
 
@@ -393,23 +426,23 @@ class preproc(object):
 
         return torch.from_numpy(image_t), targets_t
 
-    def _imgaug_(self, image, targets=None):
-        if self.p == -2: # abs_test
-            targets = np.zeros((1,5))
-            image = preproc_for_test(image, self.w_h_resize, self.means)
-            return torch.from_numpy(image), targets
-
-        boxes = targets[:, :-1].copy()
-        labels = targets[:, -1].copy()
-
-        if self.p == -1:  # eval
-            height, width, _ = image.shape
-            boxes[:, 0::2] /= width
-            boxes[:, 1::2] /= height
-            labels = np.expand_dims(labels, 1)
-            targets = np.hstack((boxes, labels))
-            image = preproc_for_test(image, self.w_h_resize, self.means)
-            return torch.from_numpy(image), targets
+    # def _imgaug_(self, image, targets=None):
+    #     if self.p == -2: # abs_test
+    #         targets = np.zeros((1,5))
+    #         image = preproc_for_test(image, self.w_h_resize, self.means)
+    #         return torch.from_numpy(image), targets
+    #
+    #     boxes = targets[:, :-1].copy()
+    #     labels = targets[:, -1].copy()
+    #
+    #     if self.p == -1:  # eval
+    #         height, width, _ = image.shape
+    #         boxes[:, 0::2] /= width
+    #         boxes[:, 1::2] /= height
+    #         labels = np.expand_dims(labels, 1)
+    #         targets = np.hstack((boxes, labels))
+    #         image = preproc_for_test(image, self.w_h_resize, self.means)
+    #         return torch.from_numpy(image), targets
 
 
 

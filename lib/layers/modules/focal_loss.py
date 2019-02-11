@@ -33,8 +33,11 @@ class FocalLoss(nn.Module):
         self.unmatched_threshold = cfg.UNMATCHED_THRESHOLD
         self.variance = cfg.VARIANCE
         self.priors = priors
-        cfg.alpha=0.25
-        cfg.gamma=2.0
+        #cfg.alpha=0.70
+        #cfg.gamma=2.0
+        #for harpic, with dense  sku
+        #cfg.alpha=0.5
+        #cfg.gamma=2.0
         self.alpha = Variable(torch.ones(self.num_classes, 1) * cfg.alpha)
         self.gamma = cfg.gamma
 
@@ -75,7 +78,7 @@ class FocalLoss(nn.Module):
         conf_t = Variable(conf_t,requires_grad=False)
 
         pos = conf_t > 0
-        num_pos = pos.sum()
+        num_pos = max(pos.sum().item(),1.0)
 
         # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
@@ -109,8 +112,11 @@ class FocalLoss(nn.Module):
 
         #in the
         ignore_mask=ids<0
-        ids[ignore_mask]=0
         loss_mask = ids>=0
+
+        ids[ignore_mask]=0
+
+        pos_num= max((ids>0).sum(),1)
 
         #get one hot
         class_mask.scatter_(1, ids.data, 1.)
@@ -118,12 +124,17 @@ class FocalLoss(nn.Module):
         if inputs.is_cuda and not self.alpha.is_cuda:
             self.alpha = self.alpha.cuda()
         alpha = self.alpha[ids.data.view(-1)]
+        alpha_weight = torch.where(ids>0, alpha, 1-alpha)
         probs = (P*class_mask).sum(1).view(-1,1)
         log_p = probs.log()
 
-        batch_loss = -alpha*(torch.pow((1-probs), self.gamma))*log_p
+        batch_loss = -alpha_weight*(torch.pow((1-probs), self.gamma))*log_p
 
         batch_loss_2=batch_loss[loss_mask]
 
-        loss = batch_loss_2.sum()*(loss_mask.sum().float()/(ids.shape[0]*targets.shape[0]))
+        #loss = batch_loss_2.sum()*(loss_mask.sum().float()/(ids.shape[0]*targets.shape[0]))
+        #loss = 5*batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
+        loss = batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
+        #loss = batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
+        #loss = batch_loss_2.sum()/pos_num*200
         return loss

@@ -105,7 +105,8 @@ def add_extras(base, feature_layer, mbox, num_classes):
     loc_layers = []
     conf_layers = []
     in_channels = None
-    for layer, depth, box in zip(feature_layer[0], feature_layer[1], mbox):
+
+    for idx, (layer, depth, box) in enumerate(zip(feature_layer[0], feature_layer[1], mbox)):
         if layer == 'S':
             extra_layers += [ _conv_dw(in_channels, depth, stride=2, padding=1, expand_ratio=1) ]
             in_channels = depth
@@ -117,7 +118,12 @@ def add_extras(base, feature_layer, mbox, num_classes):
         #loc_layers += [nn.Conv2d(in_channels, box * 4, kernel_size=3, padding=1)]
         #conf_layers += [nn.Conv2d(in_channels, box * num_classes, kernel_size=3, padding=1)]
         loc_layers += [ _conv_dw(in_channels, box*4, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
-        conf_layers += [ _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
+        if idx == 100:
+            conf_layers += [ nn.Sequential(
+                        _conv_dw(in_channels, in_channels, stride=1, padding=1, expand_ratio=1, three_conv=False),
+                        _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False))]
+        else:
+            conf_layers += [ _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
     return base, extra_layers, (loc_layers, conf_layers)
 
 
