@@ -21,7 +21,7 @@ class SSDLite(nn.Module):
         num_classes: num of classes 
     """
 
-    def __init__(self, base, extras, head, feature_layer, num_classes):
+    def __init__(self, base, extras, head, feature_layer, num_classes,conf_dist):
         super(SSDLite, self).__init__()
         self.num_classes = num_classes
         # SSD network
@@ -31,8 +31,10 @@ class SSDLite(nn.Module):
 
         self.loc = nn.ModuleList(head[0])
         self.conf = nn.ModuleList(head[1])
-        self.softmax = nn.Softmax(dim=-1)
+        self.softmax = nn.Softmax(dim=-1) if conf_dist=='softmax' else nn.Sigmoid()
+        #self.softmax = nn.Sigmoid() if conf_dist == 'sigmoid' else nn.Softmax(dim=-1)
 
+        #self.batch_norm = nn.BatchNorm2d(feature_layer[1][0]+feature_layer[1][1])
         self.feature_layer = feature_layer[0]
         
 
@@ -70,6 +72,11 @@ class SSDLite(nn.Module):
                 #    sources.append(s)
                 #else:
                 sources.append(x)
+
+        # source_1=F.upsample(sources[1],scale_factor=2)
+        # source_0=torch.cat([sources[0],source_1],1)
+        # source_0=self.batch_norm(source_0)
+        # sources[0]=source_0
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
@@ -117,13 +124,14 @@ def add_extras(base, feature_layer, mbox, num_classes):
             in_channels = depth
         #loc_layers += [nn.Conv2d(in_channels, box * 4, kernel_size=3, padding=1)]
         #conf_layers += [nn.Conv2d(in_channels, box * num_classes, kernel_size=3, padding=1)]
+        #if idx == 0:
+        #    in_channels = feature_layer[1][0]+feature_layer[1][1]
+
+        #conf_layers += [ nn.Sequential(
+        #            _conv_dw(in_channels, in_channels, stride=1, padding=1, expand_ratio=1, three_conv=False),
+        #            _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False))]
         loc_layers += [ _conv_dw(in_channels, box*4, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
-        if idx == 100:
-            conf_layers += [ nn.Sequential(
-                        _conv_dw(in_channels, in_channels, stride=1, padding=1, expand_ratio=1, three_conv=False),
-                        _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False))]
-        else:
-            conf_layers += [ _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
+        conf_layers += [ _conv_dw(in_channels, box*num_classes, stride=1,padding=1, expand_ratio=1, three_conv=False) ]
     return base, extra_layers, (loc_layers, conf_layers)
 
 
@@ -155,6 +163,6 @@ def _conv_dw(inp, oup, stride=1, padding=0, expand_ratio=1, three_conv=True):
             nn.BatchNorm2d(oup),
         )
 
-def build_ssd_lite(base, feature_layer, mbox, num_classes):
+def build_ssd_lite(base, feature_layer, mbox, num_classes, conf_distr):
     base_, extras_, head_ = add_extras(base(), feature_layer, mbox, num_classes)
-    return SSDLite(base_, extras_, head_, feature_layer, num_classes)
+    return SSDLite(base_, extras_, head_, feature_layer, num_classes, conf_distr )

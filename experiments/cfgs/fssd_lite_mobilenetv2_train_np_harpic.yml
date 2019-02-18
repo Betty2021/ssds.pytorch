@@ -1,0 +1,59 @@
+MODEL:
+  SSDS: fssd_lite
+  NETS: mobilenet_v2
+  IMAGE_SIZE: [800, 600]
+  NUM_CLASSES: 1
+  FEATURE_LAYER: [[[13, 17], [96, 320]],
+                  [['', 'S', 'S', 'S' ], [256, 256, 256, 256 ]]]
+  STEPS: [[16, 16], [32, 32], [64, 64], [100, 100] ]
+  #SIZES: [[30, 30], [60, 60], [111, 111], [162, 162], [213, 213], [264, 264], [315, 315]]
+  SIZES: [0.035, 0.08, 0.16, 0.32, 0.6]
+
+  #w/h
+  ASPECT_RATIOS: [[2.12, 0.887, 0.51], [2.12, 0.887, 0.51], [2.12, 0.887, 0.51],
+                    [2.12, 0.887, 0.51]]
+
+TRAIN:
+  MAX_EPOCHS: 300
+  CHECKPOINTS_EPOCHS: 1
+  BATCH_SIZE: 12
+  TRAINABLE_SCOPE: 'base,norm,extras,transforms,pyramids,loc,conf'
+  RESUME_SCOPE: 'base,norm,extras,transforms,pyramids,loc,conf'
+  OPTIMIZER:
+    OPTIMIZER: sgd
+    LEARNING_RATE: 0.001
+    #LEARNING_RATE: 0.01
+    #LEARNING_RATE: 0.005
+    MOMENTUM: 0.9
+    WEIGHT_DECAY: 0.0001
+  LR_SCHEDULER:
+    SCHEDULER: SGDR
+    WARM_UP_EPOCHS: 100
+
+TEST:
+  BATCH_SIZE: 48
+  TEST_SCOPE: [288, 300]
+
+MATCHER:
+  MATCHED_THRESHOLD: 0.5
+  UNMATCHED_THRESHOLD: 0.35
+  NEGPOS_RATIO: 3
+
+POST_PROCESS:
+  SCORE_THRESHOLD: 0.01
+  IOU_THRESHOLD: 0.6
+  MAX_DETECTIONS: 100
+
+DATASET:
+  DATASET: 'np'
+  DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git_resized'
+  TRAIN_SETS: [10]
+  TEST_SETS:  [1]
+  PROB: 0.6
+  NUM_WORKERS: 16
+
+EXP_DIR: './experiments/models/fssd_mbv2_harpic'
+LOG_DIR: './experiments/models/fssd_mbv2_harpic'
+#RESUME_CHECKPOINT: './weights/fssd_lite/mobilenet_v2_fssd_lite_voc_76.7.pth'
+PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
+PHASE: ['train']

@@ -17,7 +17,7 @@ class ObjectDetector:
 
         # Build model
         print('===> Building model')
-        self.model, self.priorbox = create_model(cfg.MODEL)
+        self.model, self.priorbox = create_model(cfg.MODEL,cfg.LOSS.CONF_DISTR)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
 
         # Print the model architecture and parameters

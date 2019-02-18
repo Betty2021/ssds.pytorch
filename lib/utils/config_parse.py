@@ -75,6 +75,13 @@ __C.MODEL.CLIP = True
 # FSSD setting, NUM_FUSED for fssd
 __C.MODEL.NUM_FUSED = 3
 
+__C.LOSS = AttrDict()\
+
+__C.LOSS.FOCAL_LOSS = True
+__C.LOSS.CONF_DISTR = 'softmax'
+__C.LOSS.ALPHA= 0.25
+__C.LOSS.GAMMA = 2.0
+
 
 # ---------------------------------------------------------------------------- #
 # Train options

@@ -14,8 +14,8 @@ import random
 import math
 import imgaug.augmenters as iaa
 from lib.utils.box_utils import matrix_iou
-#_FOR_PMI_UKRAINE=True
-_FOR_PMI_UKRAINE=False
+_FOR_PMI_UKRAINE=True
+#_FOR_PMI_UKRAINE=False
 def _crop(image, boxes, labels):
     height, width, _ = image.shape
     min_cropped_ratio=0.4 if _FOR_PMI_UKRAINE else 0.70
@@ -35,18 +35,20 @@ def _crop(image, boxes, labels):
         image_t = image[roi[1]:roi[3], roi[0]:roi[2]]
         return image_t, boxes, labels
 
-    area=np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)
-    big_sku = np.max(area)>=0.02
+    area=np.prod(boxes[:, 2:] - boxes[:, :2], axis=1)/(height*width)
+    big_sku = np.mean(area)>=0.05
     if big_sku:
         return image, boxes, labels
     while True:
         mode = random.choice((
             None,
-            (0.001, 0.25), #0.025*0.025=0.000625
-            (0.02, 0.25),
+            (0.001,0.05), #0.025*0.025=0.000625
+            (0.002,0.10),
+            (0.005,0.10),
+            (0.01, 0.1),
             (0.05, 0.25),
             (0.1,  0.30),
-            (0.3,  0.5),
+            (0.25, 0.5),
             #(0.5, None),
             #(0.7, None),
             #(0.9, None),
@@ -68,8 +70,8 @@ def _crop(image, boxes, labels):
             #the sku in such image is quite big, so need to crop out a small portion
             #and resize it to [800,600] to make a fake big sku in training stage.
             scale = random.uniform(min_cropped_ratio, 1.)
-            min_ratio = max(0.8, scale*scale)
-            max_ratio = min(1/0.8, 1. / scale / scale)
+            min_ratio = max(0.85, scale*scale)
+            max_ratio = min(1/0.85, 1. / scale / scale)
             ratio = math.sqrt(random.uniform(min_ratio, max_ratio))
             #just keep aspect ratio
             #ratio = 1.0
@@ -90,13 +92,12 @@ def _crop(image, boxes, labels):
 
             #centers = (boxes[:, :2] + boxes[:, 2:]) / 2
             #mask = np.logical_and(roi[:2] < centers, centers < roi[2:]).all(axis=1)
-            mask = (iou>(1/2400)).squeeze()  #ignore those skus whose occupation ratio <1/(40*60)
+            mask = (iou>(1/2400)).squeeze(1)
             boxes_t = boxes[mask].copy()
             labels_t = labels[mask].copy()
             if len(boxes_t) == 0:
                 continue
             old_boxes_t = boxes_t.copy()
-
             boxes_t[:, :2] = np.maximum(boxes_t[:, :2], roi[:2])
             boxes_t[:, :2] -= roi[:2]
             boxes_t[:, 2:] = np.minimum(boxes_t[:, 2:], roi[2:])
@@ -114,6 +115,10 @@ def _crop(image, boxes, labels):
 
             boxes_t = boxes_t[mask]
             labels_t = labels_t [mask]
+            if len(boxes_t)==0:
+                targets = np.zeros((1, 5))
+                boxes_t = targets[:, :-1].copy()
+                labels_t = targets[:, -1].copy()
 
             return image_t, boxes_t,labels_t
 
@@ -168,7 +173,7 @@ def _expand(image, boxes, fill, p):
     #    return image, boxes
     max_expand_ratio=2.0 if _FOR_PMI_UKRAINE else 1.4
 
-    max_pad_scale=np.clip(math.sqrt(min_area)/(1/33.0),1.0, max_expand_ratio)
+    max_pad_scale=np.clip(math.sqrt(min_area)/(1/36.0),1.0, max_expand_ratio)
     if max_pad_scale <=1.0:
         return image, boxes
 
@@ -412,6 +417,9 @@ class preproc(object):
         b_h = (boxes[:, 3] - boxes[:, 1])*1.
         #mask_b= np.minimum(b_w, b_h) > 0.015
         area= b_w*b_h
+        #if len(boxes)==0:
+        #    x=0
+        #    x+=1
         mask_b= np.logical_and(area> 0.0003, area < 0.15)
         #mask_b= (b_w*b_h) > 0.0003  #area should
         boxes_t = boxes[mask_b]

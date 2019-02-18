@@ -7,6 +7,11 @@ from lib.utils.box_utils import match, match_with_ignorance, log_sum_exp, one_ho
 
 # I do not fully understand this part, It completely based on https://github.com/kuangliu/pytorch-retinanet/blob/master/loss.py
 
+def _one_hot(num_classes, labels):
+    I = torch.eye(num_classes, device=labels.device)
+    t = I[labels]
+    return t
+
 class FocalLoss(nn.Module):
     """SSD Weighted Loss Function
     Focal Loss for Dense Object Detection.
@@ -23,7 +28,7 @@ class FocalLoss(nn.Module):
                             instead summed for each minibatch.
     """
 
-    def __init__(self, cfg, priors, use_gpu=True):
+    def __init__(self, cfg, priors, use_gpu, cfg_loss):
         super(FocalLoss, self).__init__()
         self.use_gpu = use_gpu
         self.num_classes = cfg.NUM_CLASSES
@@ -36,10 +41,13 @@ class FocalLoss(nn.Module):
         #cfg.alpha=0.70
         #cfg.gamma=2.0
         #for harpic, with dense  sku
-        #cfg.alpha=0.5
-        #cfg.gamma=2.0
-        self.alpha = Variable(torch.ones(self.num_classes, 1) * cfg.alpha)
-        self.gamma = cfg.gamma
+        self.alpha = Variable(torch.ones(self.num_classes, 1) * cfg_loss.ALPHA)
+        self.gamma = cfg_loss.GAMMA
+
+        self.alpha_scalar=cfg_loss.ALPHA
+        self.gamma_scalar=cfg_loss.GAMMA
+
+        self.focal_loss = self.focal_loss_softmax if cfg_loss.CONF_DISTR=="softmax" else self.focal_loss_sigmoid
 
 
     def forward(self, predictions, targets):
@@ -91,12 +99,12 @@ class FocalLoss(nn.Module):
         # Confidence Loss (Focal loss)
         # Shape: [batch,num_priors,1]
         #loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t.view(-1,1))
+        #loss_c = self.focal_loss_softmax(conf_data.view(-1, self.num_classes), conf_t)
         loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t)
-        #loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t.view(-1,1))
 
         return loss_l,loss_c
 
-    def focal_loss(self, inputs, targets):
+    def focal_loss_softmax(self, inputs, targets):
         '''
         targets: [batch_num, anchor_num], element type is long, <0 means ignore it, 0 mean bg, 1,2,3...is  class_num
         Focal loss.
@@ -105,7 +113,7 @@ class FocalLoss(nn.Module):
         N = inputs.size(0)
         C = inputs.size(1)
         P = F.softmax(inputs)
-        
+        #P = torch.clamp(P,1e-6, 1.0- 1e-6)
         class_mask = inputs.data.new(N, C).fill_(0)
         class_mask = Variable(class_mask)
         ids = targets.view(-1, 1)
@@ -113,7 +121,8 @@ class FocalLoss(nn.Module):
         #in the
         ignore_mask=ids<0
         loss_mask = ids>=0
-
+        #pos_mask = ids >0
+        #neg_mask = ids == 0
         ids[ignore_mask]=0
 
         pos_num= max((ids>0).sum(),1)
@@ -126,15 +135,72 @@ class FocalLoss(nn.Module):
         alpha = self.alpha[ids.data.view(-1)]
         alpha_weight = torch.where(ids>0, alpha, 1-alpha)
         probs = (P*class_mask).sum(1).view(-1,1)
+
         log_p = probs.log()
 
         batch_loss = -alpha_weight*(torch.pow((1-probs), self.gamma))*log_p
+        #batch_loss = -(torch.pow((1-probs), self.gamma))*log_p
 
         batch_loss_2=batch_loss[loss_mask]
 
         #loss = batch_loss_2.sum()*(loss_mask.sum().float()/(ids.shape[0]*targets.shape[0]))
         #loss = 5*batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
-        loss = batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
         #loss = batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
-        #loss = batch_loss_2.sum()/pos_num*200
+        loss = 4 * batch_loss_2.sum()*(ids.shape[0]/(batch_loss_2.shape[0]*targets.shape[0]))
         return loss
+
+
+        #loss = batch_loss_2.sum()/pos_num*200
+
+        #pos_loss = batch_loss [pos_mask].mean() * self.alpha_scalar
+
+        #neg_loss = batch_loss [neg_mask].mean() * (1-self.alpha_scalar)
+
+        #return  (pos_loss+neg_loss)*400
+
+    def focal_loss_sigmoid(self, inputs, targets):
+        '''
+        targets: [batch_num, anchor_num], element type is long, <0 means ignore it, 0 mean bg, 1,2,3...is  class_num
+        Focal loss.
+        mean of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
+        '''
+
+        #gamma = 2
+        #alpha = 0.75
+        #alpha = 0.50
+
+        #N = inputs.size(0)
+        #C = inputs.size(1)
+
+        ids = targets.view(-1, 1)
+        ids_mask = ids>=0 # -2 is the ignored box
+        #pos_num= max((ids>0).sum(),1)
+        # if (ids<0).sum()>0:
+        #     xxxx=0
+        #     xxxx=1
+
+        good_ids = ids[ids_mask]
+
+        good_inputs= inputs[ids_mask.squeeze(1)]
+        alpha_tensor = inputs.data.new(good_ids.shape[0]).fill_(self.alpha_scalar)
+        alpha_weight= torch.where(good_ids>0,alpha_tensor,1-alpha_tensor)
+
+        class_mask = _one_hot(self.num_classes, good_ids)
+        p = torch.clamp(good_inputs.sigmoid(), 1e-5, 1.0-1e-5)
+        #p = good_inputs.sigmoid()
+        # pt = torch.where( t > 0, p, 1-p)
+        pt = class_mask * p + (1 - class_mask) * (1 - p)
+        # with torch.no_grad():
+        focal_weight = torch.pow(1 - pt, self.gamma_scalar)
+        #alpha_weight = class_mask * alpha + (1 - class_mask) * (1 - alpha)
+
+        # binary_cross_entropy uses sigmoid
+        # per_entry_cross_entropy = -t * (p + 1e-7).log()  # - ( 1 - t ) * (1-p+1e-7).log()
+        bce = -(class_mask * torch.log(p) + (1.0 - class_mask) * torch.log(1.0 - p))
+        loss1 = torch.sum(focal_weight * bce,dim=1)*alpha_weight
+        loss = loss1.sum()*(4500/(good_ids.shape[0]))
+        #loss = 2*loss1.sum()*(ids.shape[0]/(good_ids.shape[0]*targets.shape[0]))
+        #loss = 20*loss1.sum()/pos_num
+        return loss
+
+

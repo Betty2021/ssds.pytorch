@@ -52,7 +52,8 @@ class Solver(object):
 
          # Build model
         print('===> Building model, num_classes is '+str(cfg.MODEL.NUM_CLASSES))
-        self.model, self.priorbox = create_model(cfg.MODEL)
+
+        self.model, self.priorbox = create_model(cfg.MODEL,cfg.LOSS.CONF_DISTR)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.detector = Detect(cfg.POST_PROCESS, self.priors)
 
@@ -89,7 +90,7 @@ class Solver(object):
 
         # metric
         #self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
-        self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu)
+        self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu, cfg.LOSS)
 
         # Set the logger
         self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
