@@ -17,7 +17,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 
 from lib.utils.config_parse import cfg_from_file
-from lib.ssds_train import test_model
+from lib.ssds_train import test_model, test_image, export_onnx_model
 
 def parse_args():
     """
@@ -27,6 +27,8 @@ def parse_args():
     parser.add_argument('--cfg', dest='config_file',
             help='optional config file', default=None, type=str)
 
+    parser.add_argument('--onnx', dest='onnx_file',
+                    help='optional onnx_file to be exported', default=None, type=str)
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -35,10 +37,21 @@ def parse_args():
     return args
 
 def test():
+    test_model()
+
+def test_single_image(image_path):
+    image = cv2.imread(image_path)
+    test_image(image)
+    cv2.imwrite('/tmp/np_result.jpg', image)
+
+if __name__ == '__main__':
     args = parse_args()
     if args.config_file is not None:
         cfg_from_file(args.config_file)
-    test_model()
 
-if __name__ == '__main__':
-    test()
+    if args.onnx_file is not None:
+        export_onnx_model(args.onnx_file)
+    else:
+        export_onnx_model("/tmp/bayer_ssd_lite_mbv2.onnx")
+        #test_model()
+        #test_single_image('/mnt/500GB/datasets/Bayer_0315/photos/1.jpg')

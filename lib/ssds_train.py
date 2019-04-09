@@ -300,6 +300,48 @@ class Solver(object):
             if 'visualize' in cfg.PHASE:
                 self.visualize_epoch(self.model, self.visualize_loader, self.priorbox, self.writer, 0,  self.use_gpu)
 
+    def restore_model_from_checkpoint(self):
+        previous = self.find_previous()
+        if previous:
+            for epoch, resume_checkpoint in zip(previous[0], previous[1]):
+                if epoch == self.cfg.TEST.TEST_SCOPE[1]:
+                    sys.stdout.write('\rEpoch {epoch:d}/{max_epochs:d}:\n'.format(epoch=epoch, max_epochs=self.cfg.TEST.TEST_SCOPE[1]))
+                    self.resume_checkpoint(resume_checkpoint)
+        else:
+            sys.stdout.write('\rCheckpoint {}:\n'.format(self.checkpoint))
+            self.resume_checkpoint(self.checkpoint)
+
+
+    def export_onnx(self, onnx_file):
+        model= self.get_real_model()
+        model.onnx_export = True
+        model.eval()
+        # #STEPS: [[16, 16], [32, 32], [64, 64], [100, 100]]
+        # #SIZES: [0.035, 0.08, 0.16, 0.32, 0.6]
+        # #ASPECT_RATIOS: [
+        # #    [1.82940672, 1.31881404, 0.49710597], [1.82940672, 1.31881404, 0.49710597],
+        # #    [1.82940672, 1.31881404, 0.49710597], [1.82940672, 1.31881404, 0.49710597]
+        # #]
+        # steps=[ step[0] for step in cfg.MODEL.STEPS]
+        # steps= torch.tensor(steps, dtype=torch.int32)
+        # sizes= torch.tensor(cfg.MODEL.SIZES)
+        # aspect_ratios= torch.Tensor(cfg.MODEL.ASPECT_RATIOS[0])
+        # model.set_anchor_setting(steps,
+        #                          sizes,
+        #                          aspect_ratios)
+
+        #model.train(False)
+        #images = torch.randn(1, 3, 533, 400)
+        images = torch.randn(1, 3, 800 , 600)
+        #images = torch.randn(1, 800 , 600, 3)
+        # detection_model = nn.Sequential(
+        #     nn.transpose(0,3, 1,2,3)
+        #     model
+        # )
+        torch.onnx.export(model, images, onnx_file, verbose=True,
+                          output_names=['np_loc','np_score'])
+        #torch.onnx.export(model, images, onnx_file, verbose=True)
+
 
     def train_epoch(self, model, data_loader, optimizer, criterion, writer, epoch, use_gpu):
         model.train()
@@ -491,73 +533,55 @@ class Solver(object):
         viz_pr_curve(writer, prec, rec, epoch)
         viz_archor_strategy(writer, size, gt_label, epoch)
 
-    # TODO: HOW TO MAKE THE DATALOADER WITHOUT SHUFFLE
-    # def test_epoch(self, model, data_loader, detector, output_dir, use_gpu):
-    #     # sys.stdout.write('\r===> Eval mode\n')
 
-    #     model.eval()
+    def detect_one_image(self, np_image):
+        self._detect_one_image(self.model, np_image, self.test_loader.dataset.preproc, self.detector,  self.use_gpu)
 
-    #     num_images = len(data_loader.dataset)
-    #     num_classes = detector.num_classes
-    #     batch_size = data_loader.batch_size
-    #     all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
-    #     empty_array = np.transpose(np.array([[],[],[],[],[]]),(1,0))
+    def _detect_one_image(selfself, model, np_image, preproc, detector, use_gpu=True):
+        model.eval()
+        #model.onnx_export = True
+        num_classes = detector.num_classes
 
-    #     epoch_size = len(data_loader)
-    #     batch_iterator = iter(data_loader)
+        img = np_image
+        scale = [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
+        if use_gpu:
+            images = Variable(preproc(img)[0].unsqueeze(0).cuda(), requires_grad=False)
+        else:
+            images = Variable(preproc(img)[0].unsqueeze(0), requires_grad=False)
 
-    #     _t = Timer()
+        out = model(images, phase='eval')
 
-    #     for iteration in iter(range((epoch_size))):
-    #         images, targets = next(batch_iterator)
-    #         targets = [[anno[0][1], anno[0][0], anno[0][1], anno[0][0]] for anno in targets] # contains the image size
-    #         if use_gpu:
-    #             images = Variable(images.cuda())
-    #         else:
-    #             images = Variable(images)
+        # detect
+        detections = detector.forward(out)
+        _scores=[]
+        _labels=[]
+        _coords=[]
+        batch = 0
+        for j in range(1, num_classes):
+            for det in detections[0][j]:
+                if det[0] > 0.45:
+                    d = det.cpu().numpy()
+                    score, box = d[0], d[1:]
+                    box *= scale
+                    _labels.append(j-1)
+                    _coords.append(box)
+                    _scores.append(score)
 
-    #         _t.tic()
-    #         # forward
-    #         out = model(images, is_train=False)
+        COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        FONT = cv2.FONT_HERSHEY_SIMPLEX
+        for label, score, coord in zip(_labels, _scores, _coords):
+             cv2.rectangle(img, (int(coord[0]), int(coord[1])), (int(coord[2]), int(coord[3])), COLORS[label % 3], 2)
+             cv2.putText(img, '{label}: {score:.3f}'.format(label=label, score=score),
+                         (int(coord[0]), int(coord[1])+60), FONT, 0.5, COLORS[label % 3], 2)
+        #
+        #
+        # cv2.imwrite('/tmp/ddd_result.jpg', image)
 
-    #         # detect
-    #         detections = detector.forward(out)
-
-    #         time = _t.toc()
-
-    #         # TODO: make it smart:
-    #         for i, (dets, scale) in enumerate(zip(detections, targets)):
-    #             for j in range(1, num_classes):
-    #                 cls_dets = list()
-    #                 for det in dets[j]:
-    #                     if det[0] > 0:
-    #                         d = det.cpu().numpy()
-    #                         score, box = d[0], d[1:]
-    #                         box *= scale
-    #                         box = np.append(box, score)
-    #                         cls_dets.append(box)
-    #                 if len(cls_dets) == 0:
-    #                     cls_dets = empty_array
-    #                 all_boxes[j][iteration*batch_size+i] = np.array(cls_dets)
-
-    #         # log per iter
-    #         log = '\r==>Test: || {iters:d}/{epoch_size:d} in {time:.3f}s [{prograss}]\r'.format(
-    #                 prograss='#'*int(round(10*iteration/epoch_size)) + '-'*int(round(10*(1-iteration/epoch_size))), iters=iteration, epoch_size=epoch_size,
-    #                 time=time)
-    #         sys.stdout.write(log)
-    #         sys.stdout.flush()
-
-    #     # write result to pkl
-    #     with open(os.path.join(output_dir, 'detections.pkl'), 'wb') as f:
-    #         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
-
-    #     print('Evaluating detections')
-    #     data_loader.dataset.evaluate_detections(all_boxes, output_dir)
 
 
     def test_epoch(self, model, data_loader, detector, output_dir, use_gpu):
         model.eval()
-
+        #model.onnx_export = True
         dataset = data_loader.dataset
         num_images = len(dataset)
         num_classes = detector.num_classes
@@ -701,3 +725,16 @@ def test_model():
     s = Solver()
     s.test_model()
     return True
+
+def test_image(np_image):
+    s = Solver()
+    s.restore_model_from_checkpoint()
+    s.detect_one_image(np_image)
+    return True
+
+def export_onnx_model(onnx_file):
+    s = Solver()
+    s.restore_model_from_checkpoint()
+    s.export_onnx(onnx_file)
+    return True
+

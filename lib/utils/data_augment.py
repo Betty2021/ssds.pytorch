@@ -14,8 +14,8 @@ import random
 import math
 import imgaug.augmenters as iaa
 from lib.utils.box_utils import matrix_iou
-_FOR_PMI_UKRAINE=True
-#_FOR_PMI_UKRAINE=False
+#_FOR_PMI_UKRAINE=True
+_FOR_PMI_UKRAINE=False
 def _crop(image, boxes, labels):
     height, width, _ = image.shape
     min_cropped_ratio=0.4 if _FOR_PMI_UKRAINE else 0.70

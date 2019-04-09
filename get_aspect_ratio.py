@@ -127,7 +127,8 @@ def resize_json_image(json_data, image, json_path, photo_file):
 def add_aspect_ratio(json_data, lst):
     bndboxes = json_data.get("bndboxes")
 
-    bndboxes = list(filter(lambda box: "ignore" not in box or not box["ignore"], bndboxes))
+    #bndboxes = list(filter(lambda box: "ignore" not in box or not box["ignore"], bndboxes))
+    bndboxes = list(filter(lambda box: ("ignore" not in box or not box["ignore"]) and "competitor" not in box["id"], bndboxes))
     for obj in bndboxes:
         box = obj
         w = float(box["w"])
@@ -167,7 +168,7 @@ if __name__ == '__main__':
         #if counter % 20 == 0:
         #    print("{}% Completed: {}/{}".format(done, counter, total))
     #kmeans=KMeans(n_clusters=6, random_state=0).fit(ratio_list)
-    kmeans=KMeans(n_clusters=5, random_state=0).fit(ratio_list)
+    kmeans=KMeans(n_clusters=3, random_state=0).fit(ratio_list)
     print("kmeans: ")
     print(kmeans.cluster_centers_)
     #print("End")

@@ -56,7 +56,7 @@ MATCHER:
 LOSS:
   #FOCAL_LOSS: rue
   CONF_DISTR:  softmax
-  ALPHA: 0.6
+  ALPHA: 0.3
   GAMMA: 2.0
 
 POST_PROCESS:
@@ -73,8 +73,8 @@ DATASET:
   PROB: 0.6
   NUM_WORKERS: 16
 
-EXP_DIR: './experiments/models/ssd_mbv2_softmax_pmi3'
-LOG_DIR: './experiments/models/ssd_mbv2_softmax_pmi3'
+EXP_DIR: './experiments/models/ssd_mbv2_softmax_pmi4'
+LOG_DIR: './experiments/models/ssd_mbv2_softmax_pmi4'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
 #RESUME_CHECKPOINT: './experiments/models/ssd_mbv2_sigmoid_harpic3/ssd_lite_mobilenet_v2_np_epoch_300.pth'
 PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'

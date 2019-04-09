@@ -21,11 +21,11 @@ MODEL:
   #SIZES: [[60, 60], [105, 105], [150, 150], [195, 195], [240, 240], [285, 285],[330,330]]
   #ASPECT_RATIOS: [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2], [1, 2]]
   #w/h
-  ASPECT_RATIOS: [[1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821],
-                  [1.01374209, 1.43088333, 1.20318821]]
+  ASPECT_RATIOS: [[2.12, 0.887, 0.51], [2.12, 0.887, 0.51], [2.12, 0.887, 0.51],
+                  [2.12, 0.887, 0.51]]
 
 TRAIN:
-  MAX_EPOCHS: 400
+  MAX_EPOCHS: 300
   CHECKPOINTS_EPOCHS: 1
   BATCH_SIZE: 14
   TRAINABLE_SCOPE: 'base,extras,loc,conf'
@@ -46,7 +46,8 @@ TRAIN:
 
 TEST:
   BATCH_SIZE: 12
-  TEST_SCOPE: [1540, 1560]
+  #TEST_SCOPE: [1540, 1560]
+  TEST_SCOPE: [295,300]
 
 MATCHER:
   MATCHED_THRESHOLD: 0.5
@@ -55,8 +56,7 @@ MATCHER:
 
 LOSS:
   #FOCAL_LOSS: rue
-  #CONF_DISTR:  softmax
-  CONF_DISTR:  sigmoid
+  CONF_DISTR:  softmax
   ALPHA: 0.3
   GAMMA: 2.0
 
@@ -67,16 +67,16 @@ POST_PROCESS:
 
 DATASET:
   DATASET: 'np'
+  DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git/field_test_resized'
   #DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git_resized'
-  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
-  TRAIN_SETS: [2]
+  TRAIN_SETS: [10]
   TEST_SETS:  [1]
   PROB: 0.6
   NUM_WORKERS: 16
 
-EXP_DIR: './experiments/models/ssd_mbv2_sigmoid_pmi4'
-LOG_DIR: './experiments/models/ssd_mbv2_sigmoid_pmi4'
+EXP_DIR: './experiments/models/ssd_mbv2_softmax_harpic1'
+LOG_DIR: './experiments/models/ssd_mbv2_softmax_harpic1'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
 #RESUME_CHECKPOINT: './experiments/models/ssd_mbv2_sigmoid_harpic3/ssd_lite_mobilenet_v2_np_epoch_300.pth'
 PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
-PHASE: ['train']
+PHASE: ['test']

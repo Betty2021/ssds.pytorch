@@ -146,7 +146,8 @@ class FocalLoss(nn.Module):
         #loss = batch_loss_2.sum()*(loss_mask.sum().float()/(ids.shape[0]*targets.shape[0]))
         #loss = 5*batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
         #loss = batch_loss_2.sum()*(loss_mask.shape[0]/(ids.shape[0]*targets.shape[0]))
-        loss = 4 * batch_loss_2.sum()*(ids.shape[0]/(batch_loss_2.shape[0]*targets.shape[0]))
+        #loss = 4 * batch_loss_2.sum()*(ids.shape[0]/(batch_loss_2.shape[0]*targets.shape[0]))
+        loss = 2 * batch_loss_2.sum()*(ids.shape[0]/(batch_loss_2.shape[0]*targets.shape[0]))
         return loss
 
 
@@ -198,7 +199,8 @@ class FocalLoss(nn.Module):
         # per_entry_cross_entropy = -t * (p + 1e-7).log()  # - ( 1 - t ) * (1-p+1e-7).log()
         bce = -(class_mask * torch.log(p) + (1.0 - class_mask) * torch.log(1.0 - p))
         loss1 = torch.sum(focal_weight * bce,dim=1)*alpha_weight
-        loss = loss1.sum()*(4500/(good_ids.shape[0]))
+        #loss = loss1.sum()*(4500/(good_ids.shape[0]))
+        loss = loss1.sum()*(6000/(good_ids.shape[0]))
         #loss = 2*loss1.sum()*(ids.shape[0]/(good_ids.shape[0]*targets.shape[0]))
         #loss = 20*loss1.sum()/pos_num
         return loss

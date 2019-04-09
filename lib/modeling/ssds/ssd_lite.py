@@ -21,8 +21,10 @@ class SSDLite(nn.Module):
         num_classes: num of classes 
     """
 
-    def __init__(self, base, extras, head, feature_layer, num_classes,conf_dist):
+    def __init__(self, base, extras, head, feature_layer,
+                 num_classes, conf_dist):
         super(SSDLite, self).__init__()
+        self.onnx_export=False
         self.num_classes = num_classes
         # SSD network
         self.base = nn.ModuleList(base)
@@ -36,7 +38,19 @@ class SSDLite(nn.Module):
 
         #self.batch_norm = nn.BatchNorm2d(feature_layer[1][0]+feature_layer[1][1])
         self.feature_layer = feature_layer[0]
-        
+
+        # self.cfg_anchor_steps=None
+        # self.cfg_anchor_sizes=None
+        # self.cfg_aspect_ratios=None
+
+
+    # def set_anchor_setting(self,cfg_anchor_steps=None,
+    #                        cfg_anchor_sizes=None,
+    #                        cfg_anchor_aspects=None):
+    #     self.cfg_anchor_steps = cfg_anchor_steps
+    #     self.cfg_anchor_sizes = cfg_anchor_sizes
+    #     self.cfg_anchor_aspects= cfg_anchor_aspects
+
 
     def forward(self, x, phase='eval'):
         """Applies network layers and ops on input image(s) x.
@@ -62,7 +76,9 @@ class SSDLite(nn.Module):
         sources = list()
         loc = list()
         conf = list()
-
+        #if self.onnx_export:
+            #nchw
+        #    x=x.permute(0,3,1,2)
         # apply bases layers and cache source layer outputs
         for k in range(len(self.base)):
             x = self.base[k](x)
@@ -92,12 +108,32 @@ class SSDLite(nn.Module):
         for (x, l, c) in zip(sources, self.loc, self.conf):
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
-        loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
-        conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
 
-        if phase == 'eval':
+        if self.onnx_export:
+            loc = torch.cat([o.view(1,-1) for o in loc], 1)
+            conf = torch.cat([o.view(1, -1) for o in conf], 1)
+            #loc = torch.cat([o.view(-1,4) for o in loc], 0)
+            #conf = torch.cat([o.view(-1, self.num_classes) for o in conf], 0)
+        else:
+            loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
+            conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+
+
+        if self.onnx_export:
+            #scores = self.softmax(conf)  # conf predsreturn loc,
+            #return loc, scores
             output = (
+                #3d tensor  batch * num_prior * 4
+                loc.view(1, -1, 4),                   # loc preds
+                #2d tensor (batch*num_prior) * 4
+                self.softmax(conf.view(1, -1, self.num_classes)),  # conf preds
+            )
+        elif phase == 'eval':
+
+            output = (
+                #3d tensor  batch * num_prior * 4
                 loc.view(loc.size(0), -1, 4),                   # loc preds
+                #2d tensor (batch*num_prior) * 4
                 self.softmax(conf.view(-1, self.num_classes)),  # conf preds
             )
         else:

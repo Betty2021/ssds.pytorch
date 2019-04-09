@@ -17,17 +17,18 @@ MODEL:
   #SIZES: [[15, 15], [48, 48], [96, 96], [192, 192], [320, 320]]
   #SIZES: [[26, 26], [48, 48], [96, 96], [192, 192], [320, 320]]
   #SIZES: [0.0433, 0.08, 0.16, 0.32, 0.6]
+  #SIZES: [0.025, 0.08, 0.16, 0.32, 0.6]
   SIZES: [0.035, 0.08, 0.16, 0.32, 0.6]
   #SIZES: [[60, 60], [105, 105], [150, 150], [195, 195], [240, 240], [285, 285],[330,330]]
   #ASPECT_RATIOS: [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2], [1, 2]]
   #w/h
-  ASPECT_RATIOS: [[1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821], [1.01374209, 1.43088333, 1.20318821],
-                  [1.01374209, 1.43088333, 1.20318821]]
+  ASPECT_RATIOS: [[2.12, 0.887, 0.51], [2.12, 0.887, 0.51], [2.12, 0.887, 0.51],
+                  [2.12, 0.887, 0.51]]
 
 TRAIN:
   MAX_EPOCHS: 400
   CHECKPOINTS_EPOCHS: 1
-  BATCH_SIZE: 14
+  BATCH_SIZE: 12
   TRAINABLE_SCOPE: 'base,extras,loc,conf'
   #TRAINABLE_SCOPE: 'extras,loc,conf'
   #for test
@@ -42,41 +43,36 @@ TRAIN:
     WEIGHT_DECAY: 0.0001
   LR_SCHEDULER:
     SCHEDULER: SGDR
-    WARM_UP_EPOCHS: 100
+    WARM_UP_EPOCHS: 200
 
 TEST:
   BATCH_SIZE: 12
-  TEST_SCOPE: [1540, 1560]
+  TEST_SCOPE: [295,300]
 
 MATCHER:
   MATCHED_THRESHOLD: 0.5
   UNMATCHED_THRESHOLD: 0.35
   NEGPOS_RATIO: 3
 
-LOSS:
-  #FOCAL_LOSS: rue
-  #CONF_DISTR:  softmax
-  CONF_DISTR:  sigmoid
-  ALPHA: 0.3
-  GAMMA: 2.0
-
 POST_PROCESS:
-  SCORE_THRESHOLD: 0.01
+  SCORE_THRESHOLD: 0.2
   IOU_THRESHOLD: 0.6
   MAX_DETECTIONS: 200
 
 DATASET:
   DATASET: 'np'
+  DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git/field_test_resized'
   #DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git_resized'
-  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
-  TRAIN_SETS: [2]
+  TRAIN_SETS: [10]
   TEST_SETS:  [1]
   PROB: 0.6
   NUM_WORKERS: 16
 
-EXP_DIR: './experiments/models/ssd_mbv2_sigmoid_pmi4'
-LOG_DIR: './experiments/models/ssd_mbv2_sigmoid_pmi4'
+#EXP_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes_rb_harpic17'
+#LOG_DIR: './experiments/models/ssd_mobilenet_v2_np_4l_fl_4boxes_rb_harpic17'
+EXP_DIR: './experiments/models/ssd_mbv2_sigmoid_harpic5'
+LOG_DIR: './experiments/models/ssd_mbv2_sigmoid_harpic5'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
-#RESUME_CHECKPOINT: './experiments/models/ssd_mbv2_sigmoid_harpic3/ssd_lite_mobilenet_v2_np_epoch_300.pth'
+#RESUME_CHECKPOINT: './experiments/models/ssd_mobilenet_v2_np_4l_flx_3boxes/ssd_lite_mobilenet_v2_np_epoch_100.pth'
 PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
-PHASE: ['train']
+PHASE: ['test']

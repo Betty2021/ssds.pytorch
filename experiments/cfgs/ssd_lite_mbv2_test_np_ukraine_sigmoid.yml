@@ -46,7 +46,8 @@ TRAIN:
 
 TEST:
   BATCH_SIZE: 12
-  TEST_SCOPE: [1540, 1560]
+  #TEST_SCOPE: [1540, 1560]
+  TEST_SCOPE: [295, 300]
 
 MATCHER:
   MATCHED_THRESHOLD: 0.5
@@ -61,14 +62,15 @@ LOSS:
   GAMMA: 2.0
 
 POST_PROCESS:
-  SCORE_THRESHOLD: 0.01
+  SCORE_THRESHOLD: 0.1
   IOU_THRESHOLD: 0.6
   MAX_DETECTIONS: 200
 
 DATASET:
   DATASET: 'np'
   #DATASET_DIR: '/home/keyong/Documents/ssd/rb_harpic.git_resized'
-  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
+  #DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git_resized'
+  DATASET_DIR: '/mnt/500GB/datasets/PMIUkrainePreUAT.git/field_test_20181004_resized'
   TRAIN_SETS: [2]
   TEST_SETS:  [1]
   PROB: 0.6
@@ -79,4 +81,4 @@ LOG_DIR: './experiments/models/ssd_mbv2_sigmoid_pmi4'
 #RESUME_CHECKPOINT: './weights/ssd_lite/mobilenet_v2_ssd_lite_voc_73.2.pth'
 #RESUME_CHECKPOINT: './experiments/models/ssd_mbv2_sigmoid_harpic3/ssd_lite_mobilenet_v2_np_epoch_300.pth'
 PRETRAINED: './weights/ssd_lite/mobilenet_v2.pth'
-PHASE: ['train']
+PHASE: ['test']

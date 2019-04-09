@@ -61,7 +61,9 @@ def create_model(cfg, conf_distr):
     #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios) for aspect_ratios in cfg.ASPECT_RATIOS]
     number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios)+1 for aspect_ratios in cfg.ASPECT_RATIOS]
 
-    model = ssds_map[cfg.SSDS](base=base, feature_layer=cfg.FEATURE_LAYER, mbox=number_box, num_classes=cfg.NUM_CLASSES, conf_distr=conf_distr)
+    model = ssds_map[cfg.SSDS](base=base, feature_layer=cfg.FEATURE_LAYER,
+                               mbox=number_box, num_classes=cfg.NUM_CLASSES,
+                               conf_distr=conf_distr)
     #
     feature_maps = _forward_features_size(model, cfg.IMAGE_SIZE)
     print('==>Feature map size:')
