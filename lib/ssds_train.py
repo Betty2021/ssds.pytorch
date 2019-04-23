@@ -576,6 +576,7 @@ class Solver(object):
         #
         #
         # cv2.imwrite('/tmp/ddd_result.jpg', image)
+        print("%d boxes detected" %(len(_labels)))
 
 
 

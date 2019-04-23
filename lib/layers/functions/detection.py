@@ -81,7 +81,7 @@ class Detect(Function):
     #     return self.output
 
 
-    def forward(self, predictions):
+    def forward_1(self, predictions):
         """
         Args:
             loc_data: (tensor) Loc preds from loc layers
@@ -160,4 +160,95 @@ class Detect(Function):
         # _, idx = flt[:, 0].sort(0)
         # _, rank = idx.sort(0)
         # flt[(rank >= self.top_k).unsqueeze(1).expand_as(flt)].fill_(0)
+        return output
+
+
+    def forward(self, predictions):
+        """
+        Args:
+            loc_data: (tensor) Loc preds from loc layers
+                Shape: [batch,num_priors*4]
+            conf_data: (tensor) Shape: Conf preds from conf layers
+                Shape: [batch*num_priors,num_classes]
+            prior_data: (tensor) Prior boxes and variances from priorbox layers
+                Shape: [1,num_priors,4]
+        """
+        loc, conf = predictions
+
+        loc_data = loc.data
+        conf_data = conf.data
+        prior_data = self.priors.data
+
+        num = loc_data.size(0)  # batch size
+        num_priors = prior_data.size(0)
+        #self.output.zero_()
+        if num == 1:
+            # size batch x num_classes x num_priors
+            conf_preds = conf_data.t().contiguous().unsqueeze(0)
+        else:
+            conf_preds = conf_data.view(num, num_priors,
+                                        self.num_classes).transpose(2, 1)
+            #self.output.expand_(num, self.num_classes, self.top_k, 5)
+        output = torch.zeros(num, self.num_classes, self.top_k, 5)
+
+        _t = {'decode': Timer(), 'misc': Timer(), 'box_mask':Timer(), 'score_mask':Timer(),'nms':Timer(), 'cpu':Timer(),'sort':Timer()}
+        gpunms_time = 0
+        scores_time=0
+        box_time=0
+        cpu_tims=0
+        decode_time=0
+        _t['misc'].tic()
+        # Decode predictions into bboxes.
+        for i in range(num):
+            _t['decode'].tic()
+            decoded_boxes = decode(loc_data[i], prior_data, self.variance)
+            decode_time += _t['decode'].toc()
+            # For each class, perform nms
+            conf_scores = conf_preds[i].clone()
+            all_scores=None
+            all_klasses=None
+            all_boxes=None
+            for cl in range(1, self.num_classes):
+                _t['cpu'].tic()
+                c_mask = conf_scores[cl].gt(self.conf_thresh).nonzero().view(-1)
+                cpu_tims+=_t['cpu'].toc()
+                if c_mask.numel() == 0:
+                    continue
+                _t['score_mask'].tic()
+                scores = conf_scores[cl][c_mask]
+                scores_time+=_t['score_mask'].toc()
+                if scores.numel() == 0:
+                    continue
+                klasses = torch.ones([len(scores)],dtype=torch.int32)*cl
+                _t['box_mask'].tic()
+                boxes = decoded_boxes[c_mask, :]
+                box_time+=_t['box_mask'].toc()
+
+                if all_boxes is None:
+                    all_boxes = boxes
+                    all_klasses = klasses
+                    all_scores = scores
+                else:
+                    all_boxes = torch.cat([all_boxes, boxes])
+                    all_klasses = torch.cat([all_klasses, klasses])
+                    all_scores= torch.cat([all_scores, scores])
+
+
+            if all_klasses is not None:
+                # idx of highest scoring and non-overlapping boxes per class
+                ids, count = nms(all_boxes, all_scores, self.nms_thresh, self.top_k)
+                all_klasses = all_klasses[ids[:count]]
+                all_scores =  all_scores[ids[:count]]
+                all_boxes =  all_boxes[ids[:count]]
+
+                for cl in range(1, self.num_classes):
+                    mask = all_klasses == cl
+                    klasses = all_klasses[mask]
+                    count = klasses.numel()
+                    if count == 0:
+                        continue
+                    scores = all_scores[mask]
+                    boxes  = all_boxes[mask]
+                    output[i, cl, :count] = \
+                        torch.cat((scores.unsqueeze(1), boxes), 1)
         return output
