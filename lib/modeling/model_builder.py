@@ -58,9 +58,14 @@ def create_model(cfg, conf_distr):
     '''
     #
     base = networks_map[cfg.NETS]
-    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios) for aspect_ratios in cfg.ASPECT_RATIOS]
-    number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios)+1 for aspect_ratios in cfg.ASPECT_RATIOS]
 
+    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios) for aspect_ratios in cfg.ASPECT_RATIOS]
+    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios)+1 for aspect_ratios in cfg.ASPECT_RATIOS]
+    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else len(aspect_ratios)+2 for aspect_ratios in cfg.ASPECT_RATIOS]
+    #number_box= [2*len(aspect_ratios) if isinstance(aspect_ratios[0], int) else (len(aspect_ratios)+1)*2 for aspect_ratios in cfg.ASPECT_RATIOS]
+
+    number_box = PriorBox.get_anchor_number(cfg.ASPECT_RATIOS)
+    print('==>AnchorBox:',number_box)
     model = ssds_map[cfg.SSDS](base=base, feature_layer=cfg.FEATURE_LAYER,
                                mbox=number_box, num_classes=cfg.NUM_CLASSES,
                                conf_distr=conf_distr)
@@ -68,8 +73,8 @@ def create_model(cfg, conf_distr):
     feature_maps = _forward_features_size(model, cfg.IMAGE_SIZE)
     print('==>Feature map size:')
     print(feature_maps)
-    # 
-    priorbox = PriorBox(image_size=cfg.IMAGE_SIZE, feature_maps=feature_maps, aspect_ratios=cfg.ASPECT_RATIOS, 
+    #
+    priorbox = PriorBox(image_size=cfg.IMAGE_SIZE, feature_maps=feature_maps, aspect_ratios=cfg.ASPECT_RATIOS,
                     scale=cfg.SIZES, archor_stride=cfg.STEPS, clip=cfg.CLIP)
     # priors = Variable(priorbox.forward(), volatile=True)
 

@@ -52,6 +52,7 @@ if __name__ == '__main__':
     if args.onnx_file is not None:
         export_onnx_model(args.onnx_file)
     else:
-        export_onnx_model("/tmp/bayer_ssd_lite_mbv2.onnx")
-        #test_model()
+        #export_onnx_model("/tmp/bayer_ssd_lite_mbv2.onnx")
+        test_model()
         #test_single_image('/mnt/500GB/datasets/Bayer_0315/photos/1.jpg')
+        #test_single_image('/tmp/a.png')

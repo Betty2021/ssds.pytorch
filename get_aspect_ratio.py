@@ -168,8 +168,10 @@ if __name__ == '__main__':
         #if counter % 20 == 0:
         #    print("{}% Completed: {}/{}".format(done, counter, total))
     #kmeans=KMeans(n_clusters=6, random_state=0).fit(ratio_list)
-    kmeans=KMeans(n_clusters=3, random_state=0).fit(ratio_list)
-    print("kmeans: ")
+    kmeans=KMeans(n_clusters=5, random_state=0).fit(ratio_list)
     print(kmeans.cluster_centers_)
+    aspect_ratios=[ x[0] for x in kmeans.cluster_centers_]
+    #print("kmeans: ["+str(kmeans.cluster_centers_[0][0])+","+ str(kmeans.cluster_centers_[1][0])+","+str(kmeans.cluster_centers_[2][0])+"]")
+    print("kmeans: "+str(aspect_ratios))
     #print("End")
 

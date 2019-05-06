@@ -102,6 +102,7 @@ class FocalLoss(nn.Module):
         #loss_c = self.focal_loss_softmax(conf_data.view(-1, self.num_classes), conf_t)
         loss_c = self.focal_loss(conf_data.view(-1, self.num_classes), conf_t)
 
+        assert not torch.isnan(loss_c)
         return loss_l,loss_c
 
     def focal_loss_softmax(self, inputs, targets):
