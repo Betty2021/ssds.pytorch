@@ -29,6 +29,8 @@ def parse_args():
 
     parser.add_argument('--onnx', dest='onnx_file',
                     help='optional onnx_file to be exported', default=None, type=str)
+    parser.add_argument('--single_image', dest='single_image',
+                        help='inference objects from image', default=None, type=str)
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -51,8 +53,11 @@ if __name__ == '__main__':
 
     if args.onnx_file is not None:
         export_onnx_model(args.onnx_file)
-    else:
+
+    elif args.single_image is not None:
+        test_single_image(args.single_image)
         #export_onnx_model("/tmp/bayer_ssd_lite_mbv2.onnx")
-        test_model()
         #test_single_image('/mnt/500GB/datasets/Bayer_0315/photos/1.jpg')
-        #test_single_image('/tmp/a.png')
+        #test_single_image('/tmp/900x600.jpg')
+    else:
+        test_model()

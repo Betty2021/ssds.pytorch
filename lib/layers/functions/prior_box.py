@@ -30,15 +30,28 @@ class PriorBox(object):
         #if archor_stride:
         #    self.steps = [(steps[0] / self.image_size[0], steps[1] / self.image_size[1]) for steps in archor_stride]
         #else:
-        print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
-        self.steps = [(1/f_h, 1/f_w) for f_h, f_w in feature_maps]
-        print(self.steps)
-        print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
+        if False:
+            print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
+            self.steps = [(1/f_h, 1/f_w) for f_h, f_w in feature_maps]
+            print(self.steps)
+            print("<<<<<<<<<<auto steps>>>>>>>>>>>>>>>>>>")
 
-        if archor_offest:
-            self.offset = [[offset[0] / self.image_size[0], offset[1] * self.image_size[1]] for offset in archor_offest] 
+            if archor_offest:
+                self.offset = [[offset[0] / self.image_size[0], offset[1] * self.image_size[1]] for offset in archor_offest]
+            else:
+                self.offset = [[steps[0] * 0.5, steps[1] * 0.5] for steps in self.steps]
+
         else:
-            self.offset = [[steps[0] * 0.5, steps[1] * 0.5] for steps in self.steps] 
+            #self.steps = [(1/f_h, 1/f_w) for f_h, f_w in feature_maps[0:1] ] + \
+            #             [(2/f_h, 2/f_w) for f_h, f_w in feature_maps[0:-1] ]
+            num_feature_layers= len(feature_maps)
+            self.steps = [(16*(2**i)/image_size[0], 16*(2**i)/image_size[1]) for i in range(num_feature_layers) ]
+            self.offset = [[steps[0] * 0.5, steps[1] * 0.5] for steps in self.steps]
+
+            #for f_h0, f_w0 in self.feature_maps[0:-1], self.feature_maps[1:])):
+            #    self.steps.append( (2.0/f_h0,  2.0/f_w0))
+
+            #self.steps = [(1/f_h, 1/f_w) for f_h, f_w in feature_maps]
 
     def get_anchor_number(aspect_ratios ):
        anchor_number_list=[]

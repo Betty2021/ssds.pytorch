@@ -340,6 +340,13 @@ class Solver(object):
         # )
         torch.onnx.export(model, images, onnx_file, verbose=True,
                           output_names=['np_loc','np_score'])
+
+        with open(onnx_file+'.npnn.header', 'w') as f:
+            print("Version: MBV2_1", file=f)
+            print("StepScale: %s"% (" ".join([str(i) for i in self.cfg.MODEL.SIZES])) , file=f)
+            print("AspectRatio: %s"% (" ".join([str(i) for i in self.cfg.MODEL.ASPECT_RATIOS[0]])), file=f)
+            print("SkuNum: %d" %(model.num_classes-1), file=f)
+            print("Content",  file=f)
         #torch.onnx.export(model, images, onnx_file, verbose=True)
 
 
@@ -544,6 +551,7 @@ class Solver(object):
 
         img = np_image
         scale = [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
+        #scale = [img.shape[0], img.shape[1], img.shape[0], img.shape[1]]
         if use_gpu:
             images = Variable(preproc(img)[0].unsqueeze(0).cuda(), requires_grad=False)
         else:
