@@ -60,10 +60,13 @@ class PriorBox(object):
             for ar in aspect_ratio:
                 ar_sqrt = sqrt(ar)
                 anchor_w = ar_sqrt
-                if ar > 0.333: # 0.6:1.8
+                anchor_h = 1.0/ar_sqrt
+                if 0.333 < ar < 3.0: # 0.6:1.8
                     num_anch+=1
-                else:
+                else if ar <=0.333:
                     num_anch+= ceil(1.0/anchor_w)
+                else: #ar >=3.0
+                    num_anch+= ceil(1.0/anchor_h)
 
             anchor_number_list.append(num_anch)
 
@@ -80,22 +83,35 @@ class PriorBox(object):
                 cx = j * self.steps[k][1] + self.offset[k][1]
                 cy = i * self.steps[k][0] + self.offset[k][0]
                 s_k = self.scales[k]
+                s_k_y = s_k*aspect
 
                 # rest of aspect ratios
                 for ar in self.aspect_ratios[k]:
                     ar_sqrt = sqrt(ar)
                     anchor_w = s_k*ar_sqrt
-                    if ar > 0.333:
-                        mean += [cx, cy, anchor_w, s_k*aspect/ar_sqrt]
+                    #anchor_h = s_k * aspect/ar_sqrt
+                    anchor_h = s_k_y / ar_sqrt
+                    if 3.0 > ar > 0.333:
+                        mean += [cx, cy, anchor_w, anchor_h]
                     else:
-                        x1=cx-s_k*0.5
-                        x2=cx+s_k*0.5
-                        while x1 + anchor_w <=x2:
-                            mean += [x1+anchor_w*0.5, cy, anchor_w, s_k*aspect/ar_sqrt]
-                            x1 = x1+anchor_w
+                        if ar <= 0.333:
+                            x1=cx-s_k*0.5
+                            x2=cx+s_k*0.5
+                            while x1 + anchor_w <=x2:
+                                mean += [x1+anchor_w*0.5, cy, anchor_w, anchor_h]
+                                x1 = x1+anchor_w
 
-                        if x1 < x2 and x1+ anchor_w >x2:
-                            mean += [x2-anchor_w*0.5, cy, anchor_w, s_k*aspect/ar_sqrt]
+                            if x1 < x2 and x1+ anchor_w > x2:
+                                mean += [x2-anchor_w*0.5, cy, anchor_w, anchor_h]
+                        else: #ar >= 3.0
+                            y1=cy - s_k_y*0.5
+                            y2=cy + s_k_y*0.5
+                            while y1 + anchor_h <= y2:
+                                mean += [cx, y1 + anchor_h*0.5, anchor_w, anchor_h]
+                                y1 = y1 + anchor_h
+
+                            if y1 < y2 and y1 + anchor_h > y2:
+                                mean += [cx, y2 - anchor_h*0.5, anchor_w, anchor_h]
 
                 # s_k_prime = sqrt(s_k * self.scales[k + 1])
                 # for ar in self.aspect_ratios[k]:
