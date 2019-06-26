@@ -6,6 +6,7 @@ import cv2
 import datetime
 import random
 import pickle
+import json
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -15,7 +16,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torch.nn.init as init
 
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
 
 from lib.layers import *
 from lib.utils.timer import Timer
@@ -93,7 +94,7 @@ class Solver(object):
         self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu, cfg.LOSS)
 
         # Set the logger
-        self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
+        #self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
         self.output_dir = cfg.EXP_DIR
         self.checkpoint = cfg.RESUME_CHECKPOINT
         self.pretrained= cfg.PRETRAINED
@@ -266,7 +267,7 @@ class Solver(object):
             if epoch > warm_up:
                 self.exp_lr_scheduler.step(epoch-warm_up)
             if 'train' in cfg.PHASE:
-                self.train_epoch(self.model, self.train_loader, self.optimizer, self.criterion, self.writer, epoch, self.use_gpu)
+                self.train_epoch(self.model, self.train_loader, self.optimizer, self.criterion, epoch, self.use_gpu)
             if 'eval' in cfg.PHASE:
                 self.eval_epoch(self.model, self.eval_loader, self.detector, self.criterion, self.writer, epoch, self.use_gpu)
             if 'test' in cfg.PHASE:
@@ -340,17 +341,16 @@ class Solver(object):
         # )
         torch.onnx.export(model, images, onnx_file, verbose=True,
                           output_names=['np_loc','np_score'])
-
         with open(onnx_file+'.npnn.header', 'w') as f:
             print("Version: MBV2_1", file=f)
             print("StepScale: %s"% (" ".join([str(i) for i in self.cfg.MODEL.SIZES])) , file=f)
             print("AspectRatio: %s"% (" ".join([str(i) for i in self.cfg.MODEL.ASPECT_RATIOS[0]])), file=f)
             print("SkuNum: %d" %(model.num_classes-1), file=f)
-            print("Content",  file=f)
+            print("Content:",  file=f)
         #torch.onnx.export(model, images, onnx_file, verbose=True)
 
 
-    def train_epoch(self, model, data_loader, optimizer, criterion, writer, epoch, use_gpu):
+    def train_epoch(self, model, data_loader, optimizer, criterion, epoch, use_gpu):
         model.train()
 
         _t_all2 = Timer()
@@ -410,9 +410,9 @@ class Solver(object):
         sys.stdout.flush()
 
         # log for tensorboard
-        writer.add_scalar('Train/loc_loss', loc_loss/epoch_size, epoch)
-        writer.add_scalar('Train/conf_loss', conf_loss/epoch_size, epoch)
-        writer.add_scalar('Train/lr', lr, epoch)
+        #writer.add_scalar('Train/loc_loss', loc_loss/epoch_size, epoch)
+        #writer.add_scalar('Train/conf_loss', conf_loss/epoch_size, epoch)
+        #writer.add_scalar('Train/lr', lr, epoch)
 
     def check_priors(self, images, targets, writer):
         """targets is the list , len is batch no"""
@@ -551,7 +551,6 @@ class Solver(object):
 
         img = np_image
         scale = [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
-        #scale = [img.shape[0], img.shape[1], img.shape[0], img.shape[1]]
         if use_gpu:
             images = Variable(preproc(img)[0].unsqueeze(0).cuda(), requires_grad=False)
         else:
@@ -577,14 +576,15 @@ class Solver(object):
 
         COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
         FONT = cv2.FONT_HERSHEY_SIMPLEX
+        print("test single image:   "+ str(_coords.__len__()))
         for label, score, coord in zip(_labels, _scores, _coords):
              cv2.rectangle(img, (int(coord[0]), int(coord[1])), (int(coord[2]), int(coord[3])), COLORS[label % 3], 2)
+             #labelname = get_label_name(label)
              cv2.putText(img, '{label}: {score:.3f}'.format(label=label, score=score),
                          (int(coord[0]), int(coord[1])+60), FONT, 0.5, COLORS[label % 3], 2)
         #
         #
         # cv2.imwrite('/tmp/ddd_result.jpg', image)
-        print("%d boxes detected" %(len(_labels)))
 
 
 
@@ -723,6 +723,76 @@ class Solver(object):
         # if not os.path.exists(cfg.EXP_DIR):
         #     os.makedirs(cfg.EXP_DIR)
         # self.writer.add_graph(self.model, (dummy_input, ))
+
+def load_template_json(label_seq, json_path):
+    with open(json_path, "rb") as fp:
+        str1 = fp.read().decode('utf-8')
+        labels = json.loads(str1)
+        label_def = labels.get('categories', None)[0].get("skus")
+        label_id = label_def[label_seq].get("id")
+        return label_id
+
+def init_checkpoint():
+    s = Solver()
+    s.restore_model_from_checkpoint()
+    return s
+
+def create_npjson(s, image, json_path,use_gpu = True):
+    bboxes = list()
+    model=s.model
+
+    preproc= s.test_loader.dataset.preproc
+    detector = s.detector
+    
+    model.eval()
+    # model.onnx_export = True
+    num_classes = detector.num_classes
+    im_height, im_width, _ = image.shape
+    img = image
+    scale = [img.shape[1], img.shape[0], img.shape[1], img.shape[0]]
+    if use_gpu:
+        images = Variable(preproc(img)[0].unsqueeze(0).cuda(), requires_grad=False)
+    else:
+        images = Variable(preproc(img)[0].unsqueeze(0), requires_grad=False)
+
+    out = model(images, phase='eval')
+
+    # detect
+    detections = detector.forward(out)
+    _scores = []
+    _labels = []
+    _coords = []
+    batch = 0
+    for j in range(1, num_classes):
+        for det in detections[0][j]:
+            if det[0] > 0.45:
+                d = det.cpu().numpy()
+                score, box = d[0], d[1:]
+                box *= scale
+                _labels.append(j - 1)
+                _coords.append(box)
+                _scores.append(score)
+
+    COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+    FONT = cv2.FONT_HERSHEY_SIMPLEX
+    #print("newjson:   "+ str(_coords.__len__()))
+    for label, score, coord in zip(_labels, _scores, _coords):
+        label_id = load_template_json(label, json_path)
+        xmin, ymin, xmax, ymax = coord
+        bbox = {
+            # {
+            'x': xmin* 1,
+            'y': ymin* 1,
+            'w': (xmax - xmin)* 1,
+            'h': (ymax - ymin)* 1,
+            'id': label_id
+            # },
+            # 'category': category_index[classes[i]]['name'],
+            # 'score': float(scores[i])
+        }
+        bboxes.append(bbox)
+
+    return bboxes
 
 
 def train_model():

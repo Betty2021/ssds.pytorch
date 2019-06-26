@@ -171,7 +171,7 @@ def _expand(image, boxes, fill, p):
     min_area=np.min(b_w * b_h)/(image.shape[0]*image.shape[1])
     #if min_area< 1/40.0*1/50: #too small
     #    return image, boxes
-    max_expand_ratio=2.0 if _FOR_PMI_UKRAINE else 1.4
+    max_expand_ratio=1.4 if _FOR_PMI_UKRAINE else 1.4
 
     max_pad_scale=np.clip(math.sqrt(min_area)/(1/36.0),1.0, max_expand_ratio)
     if max_pad_scale <=1.0:
@@ -274,6 +274,52 @@ def draw_bbox(image, bbxs, color=(0, 255, 0)):
     img = img[..., ::-1]
     return img
 
+def rotation(src_img_size , src_img, src_box_info_old):
+    tar_box_info_final = src_box_info_old.copy()
+    tar_img = src_img.copy()
+    src_height_old = int(src_img_size[0])
+    src_width_old = int(src_img_size[1])
+    a = random.randint(1 , 5)
+    ii = 0
+    angle_pi = a * math.pi / 180.0
+    crop_center = (0 , 0)
+    M = cv2.getRotationMatrix2D(crop_center, a, 1.0)
+
+    right = int(src_height_old * math.sin(angle_pi))
+    top = int(src_width_old * math.sin(angle_pi))
+    src_width = int(right + src_width_old)
+    src_height = int(top + src_height_old)
+    img_new = cv2.copyMakeBorder(src_img,top,0,0,right,cv2.BORDER_CONSTANT,value=[0,0,0])
+
+    tar_img = cv2.warpAffine(img_new, M,(src_width, src_height))
+
+    tar_box_info = np.zeros((2, 2))
+    tar_box_info1 = np.zeros((2, 2))
+    tar_box_info2 = np.zeros((2, 2))
+    for z,item in enumerate(src_box_info_old):
+        src_box_info = item
+        src_box_info1 = [src_box_info[0], (((src_box_info[3] - src_box_info[1]) / 2) + src_box_info[1] + top), src_box_info[2],
+                         ((src_box_info[3] - src_box_info[1]) / 2) + src_box_info[1] + top]
+        src_box_info2 = [((src_box_info[2] - src_box_info[0]) / 2) + src_box_info[0], src_box_info[1] + top,
+                         ((src_box_info[2] - src_box_info[0]) / 2) + src_box_info[0], src_box_info[3] + top]
+
+        for i in range(2):
+            tar_box_info1[i][0] = ((src_box_info1[2 * i]) * math.cos(angle_pi) + (src_box_info1[2 * i + 1]) * math.sin(angle_pi))
+            tar_box_info2[i][1] = ((src_box_info2[2 * i + 1]) * math.cos(angle_pi) - (src_box_info2[2 * i]) * math.sin(angle_pi))
+            if tar_box_info1[i][0] < 0:
+                tar_box_info1[i][0] = 0
+            elif tar_box_info1[i][0] > src_width:
+                tar_box_info1[i][0] = src_width
+            if tar_box_info2[i][1] < 0:
+                tar_box_info2[i][1] = 0
+            elif tar_box_info2[i][1] > src_height:
+                tar_box_info2[i][1] = src_height
+
+        tar_box_info = tar_box_info1[0][0],tar_box_info2[0][1],tar_box_info1[1][0],tar_box_info2[1][1]
+        tar_box_info_final[z]=tar_box_info
+        ii+=1
+    return tar_img , tar_box_info_final[0:ii]
+
 class preproc(object):
 
     def __init__(self, resize, rgb_means, p, writer=None):
@@ -299,6 +345,7 @@ class preproc(object):
                     # image using an alpha between 0 (no sharpening) and 1
                     # (full sharpening effect).
                     sometimes(iaa.Sharpen(alpha=(0, 0.5), lightness=(0.75, 1.5))),
+                    #sometimes(iaa.Affine(rotate=(1, 5))),
                     # Add gaussian noise to some images.
                     #sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5)),
                     sometimes(iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.02*255), per_channel=0.5)),
@@ -322,8 +369,10 @@ class preproc(object):
             image = preproc_for_test(image, self.w_h_resize, self.means)
             return torch.from_numpy(image), targets
 
+        #print(targets)
         boxes = targets[:,:-1].copy()
         labels = targets[:,-1].copy()
+        
         if len(boxes) == 0:
             targets = np.zeros((1,5))
             boxes = targets[:,:-1].copy()
@@ -352,6 +401,9 @@ class preproc(object):
         if self.writer is not None:
             image_show = draw_bbox(image, boxes)
             self.writer.add_image('preprocess/input_image', image_show, self.epoch, dataformats='HWC')
+        ran = random.randint(0 , 1)
+        if ran == 1:
+            image, boxes = rotation(image.shape, image, boxes)
 
         image_t, boxes, labels = _crop(image, boxes, labels)
         if self.writer is not None:
@@ -424,6 +476,8 @@ class preproc(object):
         #mask_b= (b_w*b_h) > 0.0003  #area should
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b].copy()
+        #print('image_t:  '+ str(image_t))
+        #image_t, boxes_t = rotation(image_t.shape, image_t, boxes_t)
 
         if len(boxes_t)==0:
             image = preproc_for_test(image_o, self.w_h_resize, self.means)
