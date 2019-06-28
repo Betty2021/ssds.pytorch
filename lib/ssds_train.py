@@ -16,7 +16,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torch.nn.init as init
 
-#from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 
 from lib.layers import *
 from lib.utils.timer import Timer
@@ -90,11 +90,11 @@ class Solver(object):
         self.max_epochs = cfg.TRAIN.MAX_EPOCHS
 
         # metric
-        #self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
+        self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
         self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu, cfg.LOSS)
 
         # Set the logger
-        #self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
+        self.writer = SummaryWriter(log_dir=cfg.LOG_DIR)
         self.output_dir = cfg.EXP_DIR
         self.checkpoint = cfg.RESUME_CHECKPOINT
         self.pretrained= cfg.PRETRAINED
@@ -267,7 +267,7 @@ class Solver(object):
             if epoch > warm_up:
                 self.exp_lr_scheduler.step(epoch-warm_up)
             if 'train' in cfg.PHASE:
-                self.train_epoch(self.model, self.train_loader, self.optimizer, self.criterion, epoch, self.use_gpu)
+                self.train_epoch(self.model, self.train_loader, self.optimizer, self.criterion, self.writer, epoch, self.use_gpu)
             if 'eval' in cfg.PHASE:
                 self.eval_epoch(self.model, self.eval_loader, self.detector, self.criterion, self.writer, epoch, self.use_gpu)
             if 'test' in cfg.PHASE:
@@ -350,7 +350,7 @@ class Solver(object):
         #torch.onnx.export(model, images, onnx_file, verbose=True)
 
 
-    def train_epoch(self, model, data_loader, optimizer, criterion, epoch, use_gpu):
+    def train_epoch(self, model, data_loader, optimizer, criterion, writer, epoch, use_gpu):
         model.train()
 
         _t_all2 = Timer()
@@ -410,9 +410,9 @@ class Solver(object):
         sys.stdout.flush()
 
         # log for tensorboard
-        #writer.add_scalar('Train/loc_loss', loc_loss/epoch_size, epoch)
-        #writer.add_scalar('Train/conf_loss', conf_loss/epoch_size, epoch)
-        #writer.add_scalar('Train/lr', lr, epoch)
+        writer.add_scalar('Train/loc_loss', loc_loss/epoch_size, epoch)
+        writer.add_scalar('Train/conf_loss', conf_loss/epoch_size, epoch)
+        writer.add_scalar('Train/lr', lr, epoch)
 
     def check_priors(self, images, targets, writer):
         """targets is the list , len is batch no"""
