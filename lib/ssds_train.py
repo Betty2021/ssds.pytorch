@@ -90,7 +90,7 @@ class Solver(object):
         self.max_epochs = cfg.TRAIN.MAX_EPOCHS
 
         # metric
-        self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
+        #self.criterion = MultiBoxLoss(cfg.MATCHER, self.priors, self.use_gpu)
         self.criterion = FocalLoss(cfg.MATCHER, self.priors, self.use_gpu, cfg.LOSS)
 
         # Set the logger
