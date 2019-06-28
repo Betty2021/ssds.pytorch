@@ -171,7 +171,7 @@ def _expand(image, boxes, fill, p):
     min_area=np.min(b_w * b_h)/(image.shape[0]*image.shape[1])
     #if min_area< 1/40.0*1/50: #too small
     #    return image, boxes
-    max_expand_ratio=1.4 if _FOR_PMI_UKRAINE else 1.4
+    max_expand_ratio=2.0 if _FOR_PMI_UKRAINE else 1.4
 
     max_pad_scale=np.clip(math.sqrt(min_area)/(1/36.0),1.0, max_expand_ratio)
     if max_pad_scale <=1.0:
