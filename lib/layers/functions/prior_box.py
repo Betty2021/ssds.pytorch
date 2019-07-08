@@ -63,7 +63,7 @@ class PriorBox(object):
                 anchor_h = 1.0/ar_sqrt
                 if 0.333 < ar < 3.0: # 0.6:1.8
                     num_anch+=1
-                else if ar <=0.333:
+                elif ar <=0.333:
                     num_anch+= ceil(1.0/anchor_w)
                 else: #ar >=3.0
                     num_anch+= ceil(1.0/anchor_h)
