@@ -16,7 +16,7 @@ import imgaug.augmenters as iaa
 from lib.utils.box_utils import matrix_iou
 #_FOR_PMI_UKRAINE=True
 _FOR_PMI_UKRAINE=False
-def _crop(image, boxes, labels):
+def _crop(self, image, boxes, labels):
     height, width, _ = image.shape
     min_cropped_ratio=0.4 if _FOR_PMI_UKRAINE else 0.70
     if len(boxes)== 0 or (len(boxes)==1 and labels[0]==0):
@@ -107,14 +107,33 @@ def _crop(image, boxes, labels):
             new_area = (boxes_t[:, 2] - boxes_t[:, 0]) * (boxes_t[:, 3] - boxes_t[:, 1])
             old_area = (old_boxes_t[:, 2] - old_boxes_t[:, 0]) * (old_boxes_t[:, 3] - old_boxes_t[:, 1])
             iou = new_area/ old_area
-            mask= iou >=0.65
-            bad_boxes_t=boxes_t[~mask]
+            mask= iou <=0.65
+            bad_mask = mask
+            #print(self.ambigous_skus)
+            #if True:
+            if len(self.ambigous_skus) > 0:
+                mask_ambigous_skus_idx = [sku in self.ambigous_skus for sku in labels_t]
+                #mask2 = 2<=labels_t
+                mask_ambigous_skus_crop_ratio = iou < (1-self.ambigous_skus_crop_ratio)
+                mask_ambigous_skus = mask_ambigous_skus_idx & mask_ambigous_skus_crop_ratio
+                bad_mask = mask|mask_ambigous_skus
+                pp_boxes = boxes_t[mask_ambigous_skus]
+                bad_boxes_t=boxes_t[bad_mask]
+                if len(pp_boxes)>1:
+                    print(self.ambigous_skus)
+                    print(self.ambigous_skus_crop_ratio)
+                    print(iou)
+                    print(labels_t)
+                    print(mask_ambigous_skus)
+                    print(bad_mask)
+
+            bad_boxes_t=boxes_t[bad_mask]
             for box in bad_boxes_t:
                 #print("black out the box because iou <0.7")
                 image_t[int(box[1]):int(box[3]), int(box[0]):int(box[2])] = random.randint(0,255)
 
-            boxes_t = boxes_t[mask]
-            labels_t = labels_t [mask]
+            boxes_t = boxes_t[~bad_mask]
+            labels_t = labels_t [~bad_mask]
             if len(boxes_t)==0:
                 targets = np.zeros((1, 5))
                 boxes_t = targets[:, :-1].copy()
@@ -322,12 +341,14 @@ def rotation(src_img_size , src_img, src_box_info_old):
 
 class preproc(object):
 
-    def __init__(self, resize, rgb_means, p, writer=None):
+    def __init__(self, resize, rgb_means, p, writer=None, ambigous_skus=[],ambigous_skus_crop_ratio=0.35):
         self.means = rgb_means
         self.w_h_resize = [resize[1],resize[0]]  #opencv's resize, which is w,h
         self.p = p
         self.writer = writer # writer used for tensorboard visualization
         self.epoch = 0
+        self.ambigous_skus = ambigous_skus
+        self.ambigous_skus_crop_ratio = ambigous_skus_crop_ratio
         if p>=0 and p <=1:
             sometimes = lambda aug: iaa.Sometimes(p, aug)
             self.seq = iaa.Sequential(
@@ -405,7 +426,7 @@ class preproc(object):
         if ran == 1:
             image, boxes = rotation(image.shape, image, boxes)
 
-        image_t, boxes, labels = _crop(image, boxes, labels)
+        image_t, boxes, labels = _crop(self, image, boxes, labels)
         if self.writer is not None:
             image_show = draw_bbox(image_t, boxes)
             self.writer.add_image('preprocess/crop_image', image_show, self.epoch,dataformats='HWC')

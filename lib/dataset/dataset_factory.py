@@ -58,7 +58,11 @@ import torch.utils.data as data
 
 def load_data(cfg, phase):
     if phase == 'train':
-        dataset = dataset_map[cfg.DATASET](cfg.DATASET_DIR, cfg.TRAIN_SETS, preproc(cfg.IMAGE_SIZE, cfg.PIXEL_MEANS, cfg.PROB))
+        #print('train')
+        #print(cfg)
+        #print(cfg.AMBIGOUS_SKUS)
+        dataset = dataset_map[cfg.DATASET](cfg.DATASET_DIR, cfg.TRAIN_SETS, preproc(cfg.IMAGE_SIZE, cfg.PIXEL_MEANS, cfg.PROB, None, cfg.AMBIGOUS_SKUS, cfg.AMBIGOUS_SKUS_CROP_RATIO))
+
         data_loader = data.DataLoader(dataset, cfg.TRAIN_BATCH_SIZE, num_workers=cfg.NUM_WORKERS,
                                   shuffle=True, collate_fn=detection_collate, pin_memory=True)
     if phase == 'eval':

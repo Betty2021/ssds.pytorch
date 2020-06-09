@@ -63,6 +63,7 @@ __C.MODEL.FEATURE_LAYER = [[22, 34, 'S', 'S', '', ''], [512, 1024, 512, 256, 256
 # STEPS for the proposed bounding box, if empty the STEPS = image_size / feature_map_size
 __C.MODEL.STEPS = []
 
+
 # STEPS for the proposed bounding box, a list from min value to max value
 __C.MODEL.SIZES = [0.2, 0.95]
 
@@ -191,6 +192,10 @@ __C.DATASET.TRAIN_BATCH_SIZE = __C.TRAIN.BATCH_SIZE
 __C.DATASET.TEST_BATCH_SIZE = __C.TEST.BATCH_SIZE
 # number of workers to extract datas
 __C.DATASET.NUM_WORKERS = 8
+# STEPS for the proposed bounding box, for some hare sku
+__C.DATASET.AMBIGOUS_SKUS= [2,3,4]
+
+__C.DATASET.AMBIGOUS_SKUS_CROP_RATIO= 0.02
 
 
 # ---------------------------------------------------------------------------- #
