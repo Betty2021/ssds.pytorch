@@ -119,7 +119,7 @@ def _crop(self, image, boxes, labels):
                 bad_mask = mask|mask_ambigous_skus
                 pp_boxes = boxes_t[mask_ambigous_skus]
                 bad_boxes_t=boxes_t[bad_mask]
-                if len(pp_boxes)>1:
+                if len(pp_boxes)>1000:
                     print(self.ambigous_skus)
                     print(self.ambigous_skus_crop_ratio)
                     print(iou)
